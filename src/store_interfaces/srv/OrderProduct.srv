@@ -1,0 +1,5 @@
+string[] product_name   # 키오스크 주문 상품 목록
+int32[] quantity         # 주문 수량
+string[] parsed_text    # 음성 주문으로 인식된 상품 목록
+---
+bool success    # 수신 완료 신호
