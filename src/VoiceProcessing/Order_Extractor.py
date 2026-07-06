@@ -1,7 +1,9 @@
+#Order_Extractor.py
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
+import json
 
 
 load_dotenv(dotenv_path=".env")
@@ -59,15 +61,17 @@ class OrderExtractor:
         """사용자 입력에서 물품과 수량 추출"""
         try:
             response = self.lang_chain.invoke({"user_input": user_input})
-            result = response.content.strip()
-            
-            # JSON 문자열을 딕셔너리로 변환
-            import json
-            quantity_dict = json.loads(result)
-            
+
+            content = response.content.strip()
+            content = content.replace("```json", "").replace("```", "").strip()
+
+            print(f"주문 추출 LLM 응답: {content}")
+
+            quantity_dict = json.loads(content)
+
             print(f"✅ 추출된 주문: {quantity_dict}")
             return quantity_dict
-        
+
         except Exception as e:
             print(f"❌ 수량 추출 실패: {e}")
             return {}

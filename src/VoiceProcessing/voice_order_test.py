@@ -1,4 +1,4 @@
-from MicController import MicController
+# voice_order_test.py
 from wakeup_word import WakeupWord
 from STT import STT
 from ModeClassifier import ModeClassifier
@@ -15,23 +15,21 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 def main():
     if openai_api_key is None:
         raise ValueError("OPENAI_API_KEY가 .env에서 로드되지 않았습니다.")
-
-    mic = MicController()
-    mic.open_stream()
-
-    wakeup = WakeupWord(mic.config.buffer_size)
-    wakeup.set_stream(mic.stream)
+    stt = STT(openai_api_key)
+    wakeup = WakeupWord()
 
     print("호출어 대기 중...")
 
-    while not wakeup.is_wakeup():
-        pass
+    while True:
+        wake_text = stt.speech2text()
+        print(f"호출어 STT 결과: {wake_text}")
 
-    mic.close_stream()
+        if wakeup.is_wakeup(wake_text):
+            print("✅ 편돌아 호출어 감지됨")
+            break
 
     print("호출어 감지됨. 음성 명령을 녹음합니다.")
 
-    stt = STT(openai_api_key)
     command_text = stt.speech2text()
 
     print(f"STT 결과: {command_text}")

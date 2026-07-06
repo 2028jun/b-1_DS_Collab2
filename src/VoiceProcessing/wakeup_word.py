@@ -1,52 +1,81 @@
-import numpy as np
-import openwakeword
-from openwakeword.model import Model
-from scipy.signal import resample
-from ament_index_python.packages import get_package_share_directory
-import MicController
+import os
+import json
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain.prompts import PromptTemplate
 
-MODEL_NAME = "hello_rokey_8332_32.tflite"
+
+load_dotenv(dotenv_path=".env")
+openai_api_key = os.getenv("OPENAI_API_KEY")
 
 
 class WakeupWord:
-    def __init__(self, buffer_size):
-        openwakeword.utils.download_models()
-        self.model = None
-        self.model_name = MODEL_NAME.split(".", maxsplit=1)[0]
-        self.stream = None
-        self.buffer_size = buffer_size
-
-    def is_wakeup(self):
-        audio_chunk = np.frombuffer(
-            self.stream.read(self.buffer_size, exception_on_overflow=False),
-            dtype=np.int16,
+    def __init__(self):
+        self.llm = ChatOpenAI(
+            model="gpt-4o",
+            temperature=0,
+            openai_api_key=openai_api_key,
         )
-        audio_chunk = resample(audio_chunk, int(len(audio_chunk) * 16000 / 48000))
-        outputs = self.model.predict(audio_chunk, threshold=0.1)
-        confidence = outputs[self.model_name]
-        print("confidence: ", confidence)
-        # Wakeword 탐지
-        if confidence > 0.3:
-            print("✅ 음성 주문 실행 감지!")
-            return True
-        return False
 
-    def set_stream(self, stream):
-        self.model = Model(wakeword_models=[MODEL_NAME])
-        self.stream = stream
+        prompt = """
+당신은 편의점 로봇 시스템의 호출어 판별기입니다.
 
+목표:
+- 사용자의 STT 결과가 로봇 호출어인지 판단하세요.
+- 호출어의 기준 단어는 "편돌아"입니다.
+- 발음이나 STT 오인식이 있어도 "편돌아"를 부른 의도라면 true로 판단하세요.
 
-if __name__ == "__main__":
-    Mic = MicController.MicController()
-    Mic.open_stream()
+호출어로 인정:
+- 편돌아
+- 편돌이
+- 편도라
+- 편돌라
+- 팬돌아
+- 펜돌아
+- 편도리
+- 편돌돌
+- 편돌아야
+- 편돌이야
+- 편의점 로봇을 부르는 말로 해석 가능한 문장
 
-    wakeup = WakeupWord(Mic.config.buffer_size)
-    wakeup.set_stream(Mic.stream)
-    
-    print("🤖 편의점 음성 주문 시스템 대기 중...")
-    print("'음성 주문 실행' 명령어를 말해주세요.\n")
-    
-    while wakeup.is_wakeup() is False:
-        pass
-    
-    print("✨ 음성 주문 인식 신호 발송!")
+호출어로 인정하지 않음:
+- 일반 주문
+- 상품 요청
+- 계산 요청
+- 단순 인사
+- 의미가 불명확한 문장
+- "편의점", "편하게", "편도"처럼 호출 의도가 아닌 단어
+
+반드시 JSON만 출력하세요.
+
+형식:
+{{"wakeup": true}}
+또는
+{{"wakeup": false}}
+
+사용자 입력:
+"{user_input}"
+"""
+
+        self.prompt_template = PromptTemplate(
+            input_variables=["user_input"],
+            template=prompt,
+        )
+
+        self.chain = self.prompt_template | self.llm
+
+    def is_wakeup(self, text: str) -> bool:
+        try:
+            response = self.chain.invoke({"user_input": text})
+
+            content = response.content.strip()
+            content = content.replace("```json", "").replace("```", "").strip()
+
+            print(f"호출어 판별 LLM 응답: {content}")
+
+            data = json.loads(content)
+            return bool(data.get("wakeup", False))
+
+        except Exception as e:
+            print(f"❌ 호출어 판별 실패: {e}")
+            return False

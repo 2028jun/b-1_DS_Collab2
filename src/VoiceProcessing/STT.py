@@ -1,3 +1,4 @@
+#STT.py
 from openai import OpenAI
 import sounddevice as sd
 import scipy.io.wavfile as wav
