@@ -2,6 +2,9 @@
 build/
 install/
 log/
+__pycache__/
 
 # VS Code 설정 폴더 제외 (src 내부에 있든 어디 있든 제외)
 **/.vscode/
+src/VoiceProcessing/.env
+.env
