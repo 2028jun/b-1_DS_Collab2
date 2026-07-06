@@ -2,3 +2,7 @@
 
 추후 KOELECTRICA 적용 후 재업로드 할 예정입니다
 
+실행 명령어:
+
+cd ~/ds_project/b-1_DS_Collab2/src/VoiceProcessing
+python3 voice_order_test.py
