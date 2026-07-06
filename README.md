@@ -5,4 +5,6 @@
 실행 명령어:
 
 cd ~/ds_project/b-1_DS_Collab2/src/VoiceProcessing
+
+
 python3 voice_order_test.py
