@@ -1,0 +1,3 @@
+string requested_mode   # 시스템 모드 ("관리자" 또는 "일반")
+---
+bool success            # 시스템 모드 변경 성공 여부

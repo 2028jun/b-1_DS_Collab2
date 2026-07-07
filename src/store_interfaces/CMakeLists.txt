@@ -10,18 +10,30 @@ find_package(ament_cmake REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(builtin_interfaces REQUIRED) # 상위 의존성 해결용
 
 set(msg_files
   "msg/StockStatus.msg"
 )
 
 set(srv_files
-  "srv/AdminAuth.srv",
+  "srv/AdminAuth.srv"
   "srv/OrderProduct.srv"
+  "srv/StartAdminAuth.srv"
+  "srv/UpdateInventory.srv"
+  "srv/DetectProduct.srv"
 )
 
 set(action_files
   "action/RobotPickPlace.action"
+)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${msg_files}
+  ${srv_files}
+  ${action_files}
+  DEPENDENCIES builtin_interfaces
 )
 
 if(BUILD_TESTING)

@@ -22,7 +22,7 @@ class OrderExtractor:
             - 사용자의 입력에서 각 물품별 수량을 정확히 추출하세요.
 
             <물품 리스트>
-            - 담배, 컵라면, 물, 음료, 과자1, 과자2
+            - 담배, 컵라면, 커피, 음료, 초코송이, 쫄병
 
             <출력 형식>
             - JSON 형식으로 반드시 다음과 같이 출력하세요: {{"물품명": 수량, "물품명": 수량, ...}}
@@ -75,20 +75,3 @@ class OrderExtractor:
         except Exception as e:
             print(f"❌ 수량 추출 실패: {e}")
             return {}
-
-
-if __name__ == "__main__":
-    extractor = OrderExtractor()
-    
-    # 테스트
-    test_inputs = [
-        "물 2개 달라고",
-        "컵라면하고 과자1 3개",
-        "음료 2개하고 과자2 하나",
-        "담배 1개"
-    ]
-    
-    for test_input in test_inputs:
-        print(f"\n📝 입력: {test_input}")
-        result = extractor.extract_order(test_input)
-        print(f"📊 결과: {result}")

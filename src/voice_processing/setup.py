@@ -1,6 +1,7 @@
 from setuptools import find_packages, setup
+import os
 
-package_name = 'store_node'
+package_name = 'voice_processing'
 
 setup(
     name=package_name,
@@ -10,6 +11,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('lib', package_name), [os.path.join(package_name, '.env')]),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -24,11 +26,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'main_manager = store_node.main_manager:main',
-            'robot_control = store_node.robot_control:main',
-            'vision_detector = store_node.vision_detector:main',
-            'database_manager = store_node.database_manager:main',
-            'admin_auth_manager = store_node.admin_auth_manager:main',
+            'voice_manager = voice_processing.voice_manager:main',
         ],
     },
 )

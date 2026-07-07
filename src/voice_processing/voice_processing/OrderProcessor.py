@@ -1,4 +1,4 @@
-from Order_Extractor import OrderExtractor
+from voice_processing.Order_Extractor import OrderExtractor
 
 
 class OrderProcessor:

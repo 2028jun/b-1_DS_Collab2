@@ -4,7 +4,6 @@ import json
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
-import re
 
 load_dotenv(dotenv_path=".env")
 openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -38,6 +37,18 @@ ADMIN
 - '관리자'라는 단어가 포함되어 있으면 ADMIN으로 분류하세요.
 - '멀리서 모드'와 같은 발음 오인식도 관리자 의도로 판단 가능하면 ADMIN으로 분류하세요.
 
+SERVICE
+- 관리자 모드 해제
+- 사용자 모드
+- 사용자 모드 진입
+- 서비스 모드
+- 서비스 모드 진입
+- 서비스 재개
+- 사용자 모드 재개
+- STT 오인식이 있어도 서비스/사용자 의도로 판단되면 SERVICE로 분류하세요.
+- '서비스', '사용자'라는 단어가 포함되어 있으면 SERVICE로 분류하세요.
+- 비슷한 발음 오인식도 서비스/사용자 의도로 판단 가능하면 SERVICE로 분류하세요
+
 ORDER
 - 상품 주문
 - 계산
@@ -50,6 +61,10 @@ ORDER
 반드시 JSON만 출력하세요.
 
 {{"mode":"ADMIN"}}
+
+또는
+
+{{"mode":"SERVICE"}}
 
 또는
 
@@ -85,7 +100,7 @@ ORDER
 
             mode = result.get("mode", "ORDER")
 
-            if mode not in ["ADMIN", "ORDER"]:
+            if mode not in ["ADMIN", "ORDER", "SERVICE"]:
                 mode = "ORDER"
 
             print("\n[Mode Classification]")
