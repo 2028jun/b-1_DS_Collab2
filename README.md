@@ -1,7 +1,7 @@
-.env 파일은 OpenAI 보안키여서 업로드가 안되서 실행해보고 싶으시면 .env 파일을 별도로 추가하신담에 실행해보시면 될거 같습니다.
+.env 파일은 voice_manager.py와 같은 폴더에 위치시켜주세요.
 
-실행 명령어:
+ros2 run store_node main_manager
 
-cd ~/ds_project/b-1_DS_Collab2/src/VoiceProcessing
+ros2 run store_node admin_auth_manager
 
-python3 voice_order_test.py
+ros2 run voice_processing voice manager
