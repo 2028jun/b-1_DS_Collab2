@@ -1,0 +1,22 @@
+2026-07-07 08:02:43.886 UTC [1916] LOG:  starting PostgreSQL 14.23 (Ubuntu 14.23-1.pgdg24.04+1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+2026-07-07 08:02:43.886 UTC [1916] LOG:  listening on IPv6 address "::1", port 5432
+2026-07-07 08:02:43.886 UTC [1916] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2026-07-07 08:02:43.891 UTC [1916] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-07-07 08:02:43.896 UTC [1917] LOG:  database system was shut down at 2026-07-07 08:02:43 UTC
+2026-07-07 08:02:43.903 UTC [1916] LOG:  database system is ready to accept connections
+2026-07-07 08:02:44.122 UTC [1916] LOG:  received fast shutdown request
+2026-07-07 08:02:44.123 UTC [1916] LOG:  aborting any active transactions
+2026-07-07 08:02:44.125 UTC [1916] LOG:  background worker "logical replication launcher" (PID 1923) exited with exit code 1
+2026-07-07 08:02:44.125 UTC [1918] LOG:  shutting down
+2026-07-07 08:02:44.141 UTC [1916] LOG:  database system is shut down
+2026-07-07 09:12:24.937 UTC [1650] LOG:  starting PostgreSQL 14.23 (Ubuntu 14.23-1.pgdg24.04+1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+2026-07-07 09:12:24.938 UTC [1650] LOG:  listening on IPv6 address "::1", port 5432
+2026-07-07 09:12:24.938 UTC [1650] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2026-07-07 09:12:24.943 UTC [1650] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-07-07 09:12:24.948 UTC [1651] LOG:  database system was shut down at 2026-07-07 09:11:37 UTC
+2026-07-07 09:12:24.956 UTC [1650] LOG:  database system is ready to accept connections
+2026-07-07 09:12:25.087 UTC [1650] LOG:  received fast shutdown request
+2026-07-07 09:12:25.089 UTC [1650] LOG:  aborting any active transactions
+2026-07-07 09:12:25.094 UTC [1650] LOG:  background worker "logical replication launcher" (PID 1657) exited with exit code 1
+2026-07-07 09:12:25.095 UTC [1652] LOG:  shutting down
+2026-07-07 09:12:25.121 UTC [1650] LOG:  database system is shut down

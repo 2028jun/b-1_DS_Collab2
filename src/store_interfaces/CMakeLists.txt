@@ -12,6 +12,7 @@ find_package(ament_cmake REQUIRED)
 # find_package(<dependency> REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(builtin_interfaces REQUIRED) # 상위 의존성 해결용
+find_package(geometry_msgs REQUIRED)
 
 set(msg_files
   "msg/StockStatus.msg"
@@ -23,6 +24,8 @@ set(srv_files
   "srv/StartAdminAuth.srv"
   "srv/UpdateInventory.srv"
   "srv/DetectProduct.srv"
+  "srv/FineTuneQr.srv"
+  "srv/ScanCounterQr.srv"
 )
 
 set(action_files
@@ -33,7 +36,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   ${msg_files}
   ${srv_files}
   ${action_files}
-  DEPENDENCIES builtin_interfaces
+  DEPENDENCIES builtin_interfaces geometry_msgs
 )
 
 if(BUILD_TESTING)

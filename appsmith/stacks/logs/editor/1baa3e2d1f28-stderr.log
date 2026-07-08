@@ -1,0 +1,53 @@
+APPSMITH_GIT_ROOT: /appsmith-stacks/git-storage
+{"level":"info","ts":1783411365.1567047,"msg":"using config from file","file":"/tmp/appsmith/Caddyfile"}
+{"level":"info","ts":1783411365.1587818,"msg":"adapted config to JSON","adapter":"caddyfile"}
+{"level":"info","ts":1783411365.1887064,"msg":"maxprocs: Leaving GOMAXPROCS=12: CPU quota undefined"}
+{"level":"info","ts":1783411365.1887288,"msg":"GOMEMLIMIT is updated","GOMEMLIMIT":14792162918,"previous":9223372036854775807}
+{"level":"info","ts":1783411365.188734,"msg":"using config from file","file":"/tmp/appsmith/Caddyfile"}
+{"level":"info","ts":1783411365.1887374,"msg":"adapted config to JSON","adapter":"caddyfile"}
+{"level":"info","ts":1783411365.1891975,"logger":"admin","msg":"admin endpoint started","address":"unix//tmp/appsmith/caddy.sock","enforce_origin":false,"origins":[]}
+{"level":"warn","ts":1783411365.1892111,"logger":"admin","msg":"admin endpoint on open interface; host checking disabled","address":"unix//tmp/appsmith/caddy.sock"}
+{"level":"info","ts":1783411365.189533,"logger":"tls.cache.maintenance","msg":"started background certificate maintenance","cache":"0x21f79ab47700"}
+{"level":"warn","ts":1783411365.1978261,"logger":"http.auto_https","msg":"server is listening only on the HTTP port, so no automatic HTTPS will be applied to this server","server_name":"srv1","http_port":80}
+{"level":"warn","ts":1783411365.2002735,"logger":"http","msg":"HTTP/2 skipped because it requires TLS","network":"tcp","addr":":2019"}
+{"level":"warn","ts":1783411365.2002842,"logger":"http","msg":"HTTP/3 skipped because it requires TLS","network":"tcp","addr":":2019"}
+{"level":"info","ts":1783411365.200286,"logger":"http.log","msg":"server running","name":"srv0","protocols":["h1","h2","h3"]}
+{"level":"warn","ts":1783411365.2003016,"logger":"http","msg":"HTTP/2 skipped because it requires TLS","network":"tcp","addr":":80"}
+{"level":"warn","ts":1783411365.2003028,"logger":"http","msg":"HTTP/3 skipped because it requires TLS","network":"tcp","addr":":80"}
+{"level":"info","ts":1783411365.2003038,"logger":"http.log","msg":"server running","name":"srv1","protocols":["h1","h2","h3"]}
+{"level":"info","ts":1783411365.2003243,"msg":"serving initial configuration"}
+{"level":"info","ts":1783411365.2015173,"logger":"tls","msg":"storage cleaning happened too recently; skipping for now","storage":"FileStorage:/appsmith-stacks/data/caddy","instance":"d274cb91-d266-486a-a20a-33ea6acfd7e6","try_again":1783497765.2015157,"try_again_in":86399.999999518}
+{"level":"info","ts":1783411365.2017272,"logger":"tls","msg":"finished cleaning storage units"}
+{"level":"info","ts":1783411534.759028,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.730329087,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7597873,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.729568561,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.760838,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.728519259,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.761535,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.727833472,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7676547,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.721710732,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.767668,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.721686563,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7678194,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.721530842,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7680457,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.7213096,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7694638,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.719901497,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7741647,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.715197994,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7747085,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.71464914,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7748964,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.714454577,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7751365,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.714217468,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7814739,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.707887956,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7815297,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.707823518,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7815602,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.707794151,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7816632,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.707690894,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7849536,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.704407557,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7869623,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.702395781,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7870572,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.702299346,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7899885,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.69937355,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7902994,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.699057993,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7915504,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.697808785,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7915602,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.69779295,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7918139,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.69754272,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.794599,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.694761973,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7952003,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.694156302,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7952394,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.694113999,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.7987263,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.690634975,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.8014648,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.687894303,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.8015025,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.6878532,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783411534.8015625,"logger":"http.handlers.rate_limit","msg":"rate limit exceeded","zone":"dynamic_zone","wait":0.687791589,"remote_ip":"172.18.0.1"}
+{"level":"info","ts":1783415497.0508595,"msg":"quitting process immediately","signal":"SIGQUIT"}

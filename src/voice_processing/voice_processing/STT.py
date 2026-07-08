@@ -13,11 +13,16 @@ load_dotenv(dotenv_path=os.path.join(".env"))
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
 class STT:
-    def __init__(self, openai_api_key):
+    def __init__(self, openai_api_key, device_index=None):
         self.client = OpenAI(api_key=openai_api_key)
         self.openai_api_key = openai_api_key
         self.duration = 5  # seconds
         self.samplerate = 16000  # Whisper는 16kHz를 선호
+
+        self.device_index = device_index
+
+        if self.device_index is not None:
+            sd.default.device = (self.device_index, None)
 
     def speech2text(self):
         # 녹음 설정
@@ -26,6 +31,7 @@ class STT:
             samplerate=self.samplerate,
             channels=1,
             dtype="int16",
+            device=self.device_index
         )
         sd.wait()
 

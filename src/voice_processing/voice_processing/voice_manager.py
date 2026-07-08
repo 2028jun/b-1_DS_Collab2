@@ -18,13 +18,16 @@ class VoiceManagerNode(Node):
         current_dir = Path(__file__).resolve().parent
         env_path = current_dir / ".env"
         
+        
         # 1. 환경 변수 세팅 및 오디오 모듈 초기화
         load_dotenv(dotenv_path=env_path)
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if openai_api_key is None:
             raise ValueError("OPENAI_API_KEY가 .env 파일에서 로드되지 않았습니다.")
+        
+        self.PC_MIC_INDEX = 5
             
-        self.stt = STT(openai_api_key)
+        self.stt = STT(openai_api_key, device_index=self.PC_MIC_INDEX)
         self.wakeup = WakeupWord()
         self.mode_classifier = ModeClassifier()
         self.order_processor = OrderProcessor() 
@@ -37,7 +40,7 @@ class VoiceManagerNode(Node):
         
         self.timer = self.create_timer(0.1, self.voice_lifecycle_loop)  # 0.1초마다 음성 인식 -> 음성이 쌓여서 텍스트 체크 가능
 
-        self.get_logger().info("메인 매니저 노드 시작") # 음성 인식 노드 시작
+        self.get_logger().info("음성 매니저 노드 시작") # 음성 인식 노드 시작
 
     def voice_lifecycle_loop(self):
         if not self.is_woken_up:

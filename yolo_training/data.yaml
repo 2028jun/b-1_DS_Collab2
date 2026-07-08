@@ -1,0 +1,7 @@
+path: /content/dataset
+train: train/images
+val: val/images
+test: test/images
+
+nc: 8
+names: ['choco', 'coffee', 'cup_noodle', 'drink', 'gripper', 'jjolbyung', 'robot', 'smoke']

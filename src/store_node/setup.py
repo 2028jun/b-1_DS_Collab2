@@ -1,4 +1,5 @@
 from setuptools import find_packages, setup
+import os
 
 package_name = 'store_node'
 
@@ -10,6 +11,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name, ['store_node/T_gripper2camera.npy']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -26,9 +28,11 @@ setup(
         'console_scripts': [
             'main_manager = store_node.main_manager:main',
             'robot_control = store_node.robot_control:main',
-            'vision_detector = store_node.vision_detector:main',
             'database_manager = store_node.database_manager:main',
             'admin_auth_manager = store_node.admin_auth_manager:main',
+            'api_server = store_node.main:main',
+            'counter_qr_node = store_node.counter_qr_node:main',
+            'gripper_vision_node = store_node.gripper_vision_node:main',
         ],
     },
 )

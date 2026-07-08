@@ -26,12 +26,6 @@ class MainManagerNode(Node):
             self.AdminAuth_callback
         )
         # -----------------------------------------------------------------------------------------------------
-        # 서비스 클라이언트
-        self.srv_scan = self.create_client(     # 물품 스캔 요청
-            DetectProduct, 
-            '/scan_counter', 
-        )
-
         self.srv_database = self.create_client(     # 데이터베이스에 재고 업데이트 요청
             UpdateInventory, 
             '/update_stock', 
@@ -95,7 +89,7 @@ class MainManagerNode(Node):
             response.success = False
             return response
     
-    def process_next_item_loop(self):   # 주문 처리 루프 : 스캔지점 이동 -> 물품 스캔 -> 물품 옮기기 -> QR 스캔 -> 장바구니 놓기
+    def process_next_item_loop(self):   # 주문 처리 루프 : 스캔지점 이동 -> 물품 스캔 -> 물품 옮기기 -> QR 스캔 -> 장바구니 놓기 -> 재고 업데이트
         if self.current_loop_index >= len(self.total_target_list):  # 모든 물품 처리를 완료했을 때
             self.get_logger().info("모든 물품을 장바구니에 담았습니다")
             self.trigger_move_robot(behavior_name="MOVE_HOME", next_step_callback=self.move_home_done)
@@ -106,36 +100,10 @@ class MainManagerNode(Node):
         
         # 스캔 지점 이동
         self.trigger_move_robot(behavior_name="MOVE_SCAN", 
-                                next_step_callback=lambda: self.trigger_detect_prdouct(self.total_target_list[self.current_loop_index])) 
-
-    
-    def trigger_detect_product(self, object_name):       # 물품 스캔 요청
-        if not self.srv_scan.wait_for_service(timeout_sec=3.0):
-            self.get_logger().error("스캔 서버가 켜져있지 않습니다.")
-            return
-
-        self.get_logger().info("물품 스캔 요청 중...")
-        request = DetectProduct.Request()
-        request.product_name = object_name      # 스캔할 물품 이름 설정
-        
-        scan_future = self.srv_scan.call_async(request)   
-        scan_future.add_done_callback(self.detect_product_callback)  
-    
-    def detect_product_callback(self, future):    # 물품 스캔 결과
-        try:
-            response = future.result()  
-            if response.success:
-                self.get_logger().info("물품 스캔 완료")
-                self.trigger_pick_object(self.total_target_list[self.current_loop_index])  # 물품 잡기 요청
-            else:
-                self.get_logger().error("물품 스캔 실패: 재고가 소진되었습니다. 관리자를 호출해주세요.")
-                self.current_loop_index += 1  # 다음 물품 처리 인덱스로 이동
-                self.process_next_item_loop()  # 다음 물품 처리 루프 시작
-        except Exception as e:
-            self.get_logger().error(f"스캔 서비스 통신 중 오류 발생: {e}")
+                                next_step_callback=lambda: self.trigger_pick_object(self.total_target_list[self.current_loop_index])) 
 
     def trigger_pick_object(self, object_name):     # 로봇 물품 잡기 요청
-        self.trigger_move_robot(behavior_name="PICK_AND_MOVE", next_step_callback=self.trigger_scan_qr, object_name=object_name)
+        self.trigger_move_robot(behavior_name="SCAN_AND_PICK", next_step_callback=self.trigger_scan_qr, object_name=object_name)
     
     def trigger_scan_qr(self):      # QR 스캔 요청
         self.trigger_move_robot(behavior_name="QR_SCAN", next_step_callback=self.trigger_place_basket)
@@ -189,15 +157,11 @@ class MainManagerNode(Node):
         
         self.get_logger().info(f"'{behavior_name}' 동작 실행...")
         
-        future = self.robot_action_client.send_goal_async(goal_msg, feedback_callback=self.robot_feedback)
+        future = self.robot_action_client.send_goal_async(goal_msg)
         
         future.add_done_callback(
             lambda f: self.action_response_handler(f, behavior_name, next_step_callback)
         )
-
-    def robot_feedback(self, feedback_msg):    # 로봇 동작 중 피드백 처리
-        message = feedback_msg.feedback.status
-        self.get_logger().info(f"{message}")    # 이동 중..., 작업 중...
 
     def action_response_handler(self, future, action_name, next_step_callback):   # 로봇 동작 완료 후 다음 단계로 넘어가기 위한 처리
         goal_handle = future.result()

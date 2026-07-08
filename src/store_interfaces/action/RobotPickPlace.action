@@ -5,5 +5,3 @@ string object_name     # 로봇이 잡을 물품 이름
 # 2. Result (최종 완료 결과)
 bool success
 ---
-# 3. Feedback (실시간 상태 피드백)
-string status :  # 로봇 동작 상태

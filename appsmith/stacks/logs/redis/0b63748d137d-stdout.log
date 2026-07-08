@@ -1,0 +1,24 @@
+1699:C 07 Jul 2026 09:12:25.997 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+1699:C 07 Jul 2026 09:12:25.997 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+1699:C 07 Jul 2026 09:12:25.997 * Redis version=7.4.8, bits=64, commit=00000000, modified=0, pid=1699, just started
+1699:C 07 Jul 2026 09:12:25.997 * Configuration loaded
+1699:M 07 Jul 2026 09:12:25.997 * Increased maximum number of open files to 10032 (it was originally set to 1024).
+1699:M 07 Jul 2026 09:12:25.997 * monotonic clock: POSIX clock_gettime
+1699:M 07 Jul 2026 09:12:25.999 * Running mode=standalone, port=6379.
+1699:M 07 Jul 2026 09:12:25.999 * Server initialized
+1699:M 07 Jul 2026 09:12:25.999 * Loading RDB produced by version 7.4.8
+1699:M 07 Jul 2026 09:12:25.999 * RDB age 42 seconds
+1699:M 07 Jul 2026 09:12:25.999 * RDB memory usage when created 1.30 Mb
+1699:M 07 Jul 2026 09:12:25.999 * Done loading RDB, keys loaded: 11, keys expired: 0.
+1699:M 07 Jul 2026 09:12:25.999 * DB loaded from disk: 0.000 seconds
+1699:M 07 Jul 2026 09:12:25.999 * Ready to accept connections tcp
+1699:M 07 Jul 2026 09:12:41.076 * 1 changes in 15 seconds. Saving...
+1699:M 07 Jul 2026 09:12:41.076 * Background saving started by pid 2129
+2129:C 07 Jul 2026 09:12:41.080 * DB saved on disk
+2129:C 07 Jul 2026 09:12:41.081 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+1699:M 07 Jul 2026 09:12:41.177 * Background saving terminated with success
+1699:signal-handler (1783415571) Received SIGTERM scheduling shutdown...
+1699:M 07 Jul 2026 09:12:51.656 * User requested shutdown...
+1699:M 07 Jul 2026 09:12:51.656 * Saving the final RDB snapshot before exiting.
+1699:M 07 Jul 2026 09:12:51.662 * DB saved on disk
+1699:M 07 Jul 2026 09:12:51.662 # Redis is now ready to exit, bye bye...

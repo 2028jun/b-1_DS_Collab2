@@ -15,6 +15,16 @@ class OrderExtractor:
         self.llm = ChatOpenAI(
             model="gpt-4o", temperature=0, openai_api_key=openai_api_key
         )
+
+        self.translation_map = {
+            "담배": "smoke",
+            "컵라면": "cup_noodle",
+            "커피": "coffee",
+            "음료": "drink",       # 예: 앞서 비전 노드에서 'water'를 썼던 것을 고려하여 매핑
+            "초코송이": "choco",
+            "쫄병": "jjolbyung"
+        }
+
         prompt_content = """
             당신은 사용자의 음성 주문에서 물품과 수량을 추출해야 합니다.
 
@@ -67,10 +77,15 @@ class OrderExtractor:
 
             print(f"주문 추출 LLM 응답: {content}")
 
-            quantity_dict = json.loads(content)
+            korean_dict = json.loads(content)
+            
+            english_dict = {}
+            for kr_item, quantity in korean_dict.items():
+                en_item = self.translation_map.get(kr_item, kr_item)
+                english_dict[en_item] = quantity
 
-            print(f"✅ 추출된 주문: {quantity_dict}")
-            return quantity_dict
+            print(f"✅ 최종 추출된 영문 주문: {english_dict}")
+            return english_dict
 
         except Exception as e:
             print(f"❌ 수량 추출 실패: {e}")
