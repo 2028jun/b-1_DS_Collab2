@@ -57,6 +57,7 @@ class RoobotControlNode(Node):
         self.gripper = RG(GRIPPER_NAME, TOOLCHARGER_IP, TOOLCHARGER_PORT)
         
         self.is_processing = False  # 작업 중 중복 요청 방지용 플래그
+        self.object = None
         
         self.basket_up = posx([336, 427.5, 125.02, 46.75, -180, 140])
         self.basket_down = posx([336, 427.5, -150, 46.75, -180, 140])
@@ -81,6 +82,7 @@ class RoobotControlNode(Node):
         request = FineTuneQr.Request()
         request.start = True
         request.object = object
+        self.object = object
         
         self.get_logger().info("YOLO 비전 노드에 상품 3D 좌표 스캔 요청 전송...")       # 물품 스캔 요청
 
@@ -145,7 +147,10 @@ class RoobotControlNode(Node):
         movel(pick_pos1, vel=VELOCITY, acc=ACC)
         movel(pick_pos2, vel=VELOCITY, acc=ACC)
 
-        pick_pos_front = posx(0, -70, 0, 0, 0, 0)
+        if self.object == "cup_noodle":
+            pick_pos_front = posx(0, -100, 0, 0, 0, 0)
+        else:
+            pick_pos_front = posx(0, -70, 0, 0, 0, 0)
         movel(pick_pos_front, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
 
         self.gripper.close_gripper()

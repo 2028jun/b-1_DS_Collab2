@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
-from store_interfaces.srv import OrderProduct, UpdateInventory, DetectProduct, AdminAuth
+from store_interfaces.srv import OrderProduct, UpdateInventory, AdminAuth
 from store_interfaces.action import RobotPickPlace
 
 class MainManagerNode(Node):
@@ -13,6 +13,7 @@ class MainManagerNode(Node):
         self.total_target_list = [] # 처리해야할 남은 물품
         self.system_mode = "SERVICE"  # 주문 모드
         self.qr_data = None # QR 데이터
+        self.robot_busy = False
 
         # 서비스 서버
         self.srv_kiosk = self.create_service(     # 주문 접수
@@ -62,7 +63,7 @@ class MainManagerNode(Node):
         return response
         
     def order_product_callback(self, request, response):    # 키오스크 화면 및 음성 주문 접수시 실행
-        if self.system_mode == "SERVICE":       # 주문 모드일 때
+        if self.system_mode == "SERVICE" and not self.robot_busy :       # 주문 모드일 때
             self.order_items_list = request.product_name  # 주문 상품 목록 저장
             self.order_quantities_list = request.quantity  # 주문 수량 목록 저장
             self.current_loop_index = 0     # 주문 처리 인덱스 초기화
@@ -86,7 +87,10 @@ class MainManagerNode(Node):
 
             return response
         else:           # 관리자 모드일 때
-            self.get_logger().warn("관리자 모드이므로 주문을 접수할 수 없습니다.")
+            if self.robot_busy is True:
+                self.get_logger().warn("로봇이 다른 작업 중입니다.")
+            else:
+                self.get_logger().warn("관리자 모드이므로 주문을 접수할 수 없습니다.")
             response.success = False
             return response
     
@@ -94,6 +98,7 @@ class MainManagerNode(Node):
         if self.current_loop_index >= len(self.total_target_list):  # 모든 물품 처리를 완료했을 때
             self.get_logger().info("모든 물품을 장바구니에 담았습니다")
             self.trigger_move_robot(behavior_name="MOVE_HOME", next_step_callback=self.move_home_done)
+            self.robot_busy = False
             return
 
         current_target_name = self.total_target_list[self.current_loop_index]   # 현재 처리할 물품 이름

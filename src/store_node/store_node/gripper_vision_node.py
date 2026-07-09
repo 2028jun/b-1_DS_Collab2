@@ -9,6 +9,7 @@ from geometry_msgs.msg import Point
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image
 from store_interfaces.srv import FineTuneQr
+from std_msgs.msg import Bool
 
 try:
     from ultralytics import YOLO
@@ -125,6 +126,8 @@ class GripperVisionNode(Node):
             self.handle_fine_tune_qr,
         )
 
+        self.scan_key_card = self.create_publisher(Bool, 'key_card', 10)
+
         self.realsense_status_timer = None
         if self.show_realsense_status:
             self.realsense_status_timer = self.create_timer(
@@ -137,6 +140,7 @@ class GripperVisionNode(Node):
             self.get_logger().info(
                 f'Ignoring YOLO classes: {sorted(self.ignore_classes)}'
             )
+
 
     def load_yolo_model(self, model_path):
         """Ultralytics YOLO 모델을 로드"""
@@ -191,6 +195,7 @@ class GripperVisionNode(Node):
             return
 
         self.update_detections_for_display()
+
         frame = self.rs_color_frame.copy()
         for det in self.latest_detections:
             x1, y1, x2, y2 = det['box']
@@ -206,6 +211,11 @@ class GripperVisionNode(Node):
                 (0, 255, 0),
                 2,
             )
+
+            if det['name'] == "card":       # 키 카드 인식 시 True를 퍼블리시
+                msg = Bool()
+                msg.data = True
+                self.scan_key_card.publish(msg)
 
         cv2.imshow(self.realsense_window_name, frame)
         cv2.waitKey(1)

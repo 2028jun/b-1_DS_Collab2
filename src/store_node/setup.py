@@ -1,4 +1,5 @@
 from setuptools import find_packages, setup
+from glob import glob
 import os
 
 package_name = 'store_node'
@@ -12,6 +13,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name, ['store_node/T_gripper2camera.npy']),
+        (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

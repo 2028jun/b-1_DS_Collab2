@@ -3,5 +3,5 @@ train: train/images
 val: val/images
 test: test/images
 
-nc: 8
-names: ['choco', 'coffee', 'cup_noodle', 'drink', 'gripper', 'jjolbyung', 'robot', 'smoke']
+nc: 10
+names: ['card', 'choco', 'coffee', 'cup_noodle', 'drink', 'gripper', 'hand', 'jjolbyung', 'robot', 'smoke']
