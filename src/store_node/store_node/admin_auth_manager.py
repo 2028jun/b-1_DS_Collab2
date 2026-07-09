@@ -15,6 +15,7 @@ class AdminAuthManagerNode(Node):
 
         self.scan_key_card = self.create_subscription(Bool, 'key_card', self.key_card_scan_callback, 10)
 
+        self.srv_start_auth = self.create_service(StartAdminAuth, '/start_admin_auth', self.start_auth_callback)    # 음성 인식 노드로부터 모드 변경 요청을 받았을 때
 
         self.get_logger().info("관리자 노드 시작")
 
