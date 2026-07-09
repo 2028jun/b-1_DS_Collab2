@@ -1,17 +1,15 @@
 #Order_Extractor.py
 import os
-from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 import json
 
-
-load_dotenv(dotenv_path=".env")
-openai_api_key = os.getenv("OPENAI_API_KEY")
+from voice_processing.env_utils import load_openai_api_key
 
 
 class OrderExtractor:
     def __init__(self):
+        openai_api_key = load_openai_api_key()
         self.llm = ChatOpenAI(
             model="gpt-4o", temperature=0, openai_api_key=openai_api_key
         )

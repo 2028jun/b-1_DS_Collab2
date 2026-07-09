@@ -10,7 +10,7 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
-        ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name, ['package.xml', os.path.join(package_name, '.env')]),
         (os.path.join('lib', package_name), [os.path.join(package_name, '.env')]),
     ],
     install_requires=['setuptools'],
@@ -26,7 +26,10 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'voice_manager = voice_processing.voice_manager:main',
+            # 'voice_manager = voice_processing.voice_manager:main',
+            'voice_manager_way1 = voice_processing.voice_manager_way1:main',
+            'voice_manager_way2 = voice_processing.voice_manager_way2:main',
+            # way1, way2 중 하나만 사용하시면 됩니다
         ],
     },
 )

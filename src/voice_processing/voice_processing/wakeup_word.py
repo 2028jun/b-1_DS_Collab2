@@ -1,16 +1,14 @@
 import os
 import json
-from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 
-
-load_dotenv(dotenv_path=".env")
-openai_api_key = os.getenv("OPENAI_API_KEY")
+from voice_processing.env_utils import load_openai_api_key
 
 
 class WakeupWord:
     def __init__(self):
+        openai_api_key = load_openai_api_key()
         self.llm = ChatOpenAI(
             model="gpt-4o",
             temperature=0,
