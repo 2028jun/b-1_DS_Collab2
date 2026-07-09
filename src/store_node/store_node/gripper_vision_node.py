@@ -1,4 +1,5 @@
 import os
+import numpy as np
 
 import time
 import cv2
@@ -320,10 +321,17 @@ class GripperVisionNode(Node):
         if not (0 <= x < width and 0 <= y < height):
             return None
 
-        z = float(self.rs_depth_frame[y, x])
-        if z <= 0:
-            self.get_logger().warn(f'{z}')
+        # z = float(self.rs_depth_frame[y, x])
+        # if z <= 0:
+        #     self.get_logger().warn(f'{z}')
+        #     return None
+        patch = self.rs_depth_frame[y-5:y+6, x-5:x+6]
+        valid = patch[patch > 0]
+
+        if len(valid) == 0:
             return None
+
+        z = float(np.median(valid))
 
         # 핀홀 카메라 모델 공식으로 픽셀 좌표를 카메라 기준 x, y, z 좌표로 변환
         point = Point()

@@ -17,7 +17,7 @@ class CounterQrNode(Node):
         self.callback_group = ReentrantCallbackGroup()
 
         self.qr_detector = cv2.QRCodeDetector()
-        self.webcam_index = self.declare_parameter('webcam_index', 3).value
+        self.webcam_index = self.declare_parameter('webcam_index', 4).value
         self.webcam_device = self.declare_parameter(
             'webcam_device',
             '/dev/v4l/by-id/usb-046d_C270_HD_WEBCAM_200901010001-video-index2',
@@ -68,12 +68,15 @@ class CounterQrNode(Node):
 
         self.get_logger().info(f'C270 opened: source={self.camera_source}')
 
-        if self.show_counter_camera:
-            cv2.namedWindow('Counter C270 View', cv2.WINDOW_NORMAL)
-            cv2.moveWindow('Counter C270 View', 700, 50)
-
         self.qr_detector = cv2.QRCodeDetector()
-        qr_data = None
+        for _ in range(10): 
+            self.cap.grab()
+        data = None
+        frame = None
+
+        if self.show_counter_camera:
+                    cv2.namedWindow('Counter C270 View', cv2.WINDOW_NORMAL)
+                    cv2.moveWindow('Counter C270 View', 700, 50)
 
         try:
             while True:
@@ -82,7 +85,7 @@ class CounterQrNode(Node):
                     self.get_logger().warn('C270 frame read failed')
                     time.sleep(0.05)
                     continue
-                    
+
                 if self.show_counter_camera:
                     cv2.imshow('Counter C270 View', frame)
                     cv2.waitKey(1)
@@ -91,6 +94,7 @@ class CounterQrNode(Node):
                 if data:
                     qr_data = data
                     break
+
         finally:
             if self.show_counter_camera:
                 try:
