@@ -12,6 +12,7 @@ class MainManagerNode(Node):
         self.current_loop_index = 0  # 현재 주문 처리 중인 인덱스
         self.total_target_list = [] # 처리해야할 남은 물품
         self.system_mode = "SERVICE"  # 주문 모드
+        self.qr_data = None # QR 데이터
 
         # 서비스 서버
         self.srv_kiosk = self.create_service(     # 주문 접수
@@ -109,7 +110,8 @@ class MainManagerNode(Node):
         self.trigger_move_robot(behavior_name="QR_SCAN", next_step_callback=self.trigger_place_basket)
     
     def trigger_place_basket(self):     # 장바구니에 물품 놓기
-        self.trigger_move_robot(behavior_name="PLACE_BASKET", next_step_callback=self.trigger_update_inventory)
+        # self.trigger_move_robot(behavior_name="PLACE_BASKET", next_step_callback=self.trigger_update_inventory)
+        self.trigger_move_robot(behavior_name="PLACE_BASKET", next_step_callback=self.complete_item_loop)
 
     def trigger_update_inventory(self):    # 재고 업데이트 요청
         current_target_name = self.total_target_list[self.current_loop_index]
@@ -171,8 +173,21 @@ class MainManagerNode(Node):
 
         # 수락되었다면 완료 결과에 콜백 연결
         goal_handle.get_result_async().add_done_callback(
-            lambda f: next_step_callback() if f.result().status == 4 else self.get_logger().error(f"{action_name} 실패")
+            lambda f: self.action_result_handler(f, action_name, next_step_callback)
         )
+    
+    def action_result_handler(self, future, action_name, next_step_callback):
+        action_result = future.result()
+        
+        if action_result.status == 4:
+            self.get_logger().info(f"🏁 '{action_name}' 동작 완료!")
+            
+            if hasattr(action_result.result, 'qr_data') and action_result.result.qr_data:   # QR 데이터를 받아왔을 때
+                self.qr_data = action_result.result.qr_data
+
+            next_step_callback()
+        else:
+            self.get_logger().error(f"❌ '{action_name}' 동작 실패 (Status: {action_result.status})")
 
 def main(args=None):
     rclpy.init(args=args)

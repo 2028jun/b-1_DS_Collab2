@@ -1,5 +1,6 @@
 import time
-import numpy as np
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import ReentrantCallbackGroup
 
 import cv2
 import rclpy
@@ -13,9 +14,10 @@ class CounterQrNode(Node):
 
     def __init__(self):
         super().__init__('counter_qr_node')
+        self.callback_group = ReentrantCallbackGroup()
 
         self.qr_detector = cv2.QRCodeDetector()
-        self.webcam_index = self.declare_parameter('webcam_index', 2).value
+        self.webcam_index = self.declare_parameter('webcam_index', 3).value
         self.webcam_device = self.declare_parameter(
             'webcam_device',
             '/dev/v4l/by-id/usb-046d_C270_HD_WEBCAM_200901010001-video-index2',
@@ -30,9 +32,13 @@ class CounterQrNode(Node):
             ScanCounterQr,
             'scan_counter_qr',
             self.handle_scan_counter_qr,
+            callback_group=self.callback_group
         )
 
         self.get_logger().info('counter_qr_node start')
+
+        self.camera_source = self.webcam_index
+        self.cap = cv2.VideoCapture(self.camera_source)
 
     def handle_scan_counter_qr(self, request, response):
         """main_manager가 요청하면 C270으로 QR을 한 번 스캔합니다."""
@@ -55,27 +61,23 @@ class CounterQrNode(Node):
 
     def scan_webcam_qr(self):
         """C270을 열고 QR을 찾습니다."""
-        camera_source = self.webcam_index
-        cap = cv2.VideoCapture(camera_source)
 
-        if not cap.isOpened():
-            self.get_logger().warn(f'C270 open failed: source={camera_source}')
+        if not self.cap.isOpened():
+            self.get_logger().warn(f'C270 open failed: source={self.camera_source}')
             return None
 
-        self.get_logger().info(f'C270 opened: source={camera_source}')
+        self.get_logger().info(f'C270 opened: source={self.camera_source}')
 
         if self.show_counter_camera:
             cv2.namedWindow('Counter C270 View', cv2.WINDOW_NORMAL)
             cv2.moveWindow('Counter C270 View', 700, 50)
 
+        self.qr_detector = cv2.QRCodeDetector()
         qr_data = None
-
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
         try:
             while True:
-                ok, frame = cap.read()
+                ok, frame = self.cap.read()
                 if not ok:
                     self.get_logger().warn('C270 frame read failed')
                     time.sleep(0.05)
@@ -83,7 +85,7 @@ class CounterQrNode(Node):
                     
                 if self.show_counter_camera:
                     cv2.imshow('Counter C270 View', frame)
-                    cv2.waitKey(30)
+                    cv2.waitKey(1)
 
                 data, _, _ = self.qr_detector.detectAndDecode(frame)
                 if data:
@@ -91,26 +93,32 @@ class CounterQrNode(Node):
                     break
         finally:
             if self.show_counter_camera:
-                cv2.destroyWindow('Counter C270 View')
-            cap.release()
+                try:
+                    cv2.destroyWindow('Counter C270 View')
+                except:
+                    pass
 
         return qr_data
 
     def destroy_node(self):
+        self.get_logger().info('종료 시 자원 해제 (Camera Release)')
+        if self.cap.isOpened():
+            self.cap.release()
         cv2.destroyAllWindows()
         super().destroy_node()
-
 
 def main(args=None):
     rclpy.init(args=args)
     node = CounterQrNode()
 
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+    
     try:
-        rclpy.spin(node)
+        executor.spin()
     finally:
         node.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

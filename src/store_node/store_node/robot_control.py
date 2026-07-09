@@ -24,7 +24,7 @@ TOOLCHARGER_PORT = "502"
 
 class RoobotControlNode(Node):
     def __init__(self):
-        super().__init__("test_node")
+        super().__init__("robot_control_node")
 
         # 비전 노드(YOLO)에 3D 좌표를 요청할 서비스 클라이언트 
         self.get_camera_coord = self.create_client(
@@ -58,13 +58,16 @@ class RoobotControlNode(Node):
         
         self.is_processing = False  # 작업 중 중복 요청 방지용 플래그
         
-        self.qr_home = posx([597.87, 4.37, 73.15, 26.29, 180, -59.31])
+        self.basket_up = posx([336, 427.5, 125.02, 46.75, -180, 140])
+        self.basket_down = posx([336, 427.5, -150, 46.75, -180, 140])
+        self.qr_home = posx([615.5, 0.13, 80.89, 138.88, -180, -130])
         self.scan_home_waypoint = posj([16.62, 24.93, 98.92, 105.82, -102.11, 33.04]) 
         self.home = posj([0, 0, 90, 0, 90, 0]) 
         self.scan_home = posx([485.63, -12.59, 167.73, 88.87, -87.93, -90.68])
 
         movej(self.home, vel=VELOCITY, acc=ACC) # 로봇 가동시 초기 자세로 이동
         self.gripper.open_gripper()
+        self.get_logger().info("robot_control_node 실행")
 
     def trigger_scan_and_pick(self, object):
         if self.is_processing:
@@ -81,11 +84,12 @@ class RoobotControlNode(Node):
         
         self.get_logger().info("YOLO 비전 노드에 상품 3D 좌표 스캔 요청 전송...")       # 물품 스캔 요청
 
-        wait(2)
+        wait(1)
         future = self.get_camera_coord.call_async(request)
-        
-        while rclpy.ok() and not future.done():
+
+        while rclpy.ok() and not future.done():  
             time.sleep(0.05)
+                
     
         camera_center_pos = None
         try:
@@ -139,10 +143,9 @@ class RoobotControlNode(Node):
         self.get_logger().info("목표 상공 위치로 이동합니다.")
         self.gripper.open_gripper()
         movel(pick_pos1, vel=VELOCITY, acc=ACC)
-        self.get_logger().info("ㅇㄹㄴㅇㄴ")
         movel(pick_pos2, vel=VELOCITY, acc=ACC)
 
-        pick_pos_front = posx(0, -80, 0, 0, 0, 0)
+        pick_pos_front = posx(0, -70, 0, 0, 0, 0)
         movel(pick_pos_front, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
 
         self.gripper.close_gripper()
@@ -151,7 +154,7 @@ class RoobotControlNode(Node):
         pick_pos_up = posx(0, 0, 20, 0, 0, 0)
         movel(pick_pos_up, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
 
-        pick_pos_back = posx(0, 140, 0, 0, 0, 0)
+        pick_pos_back = posx(0, 200, 0, 0, 0, 0)
         movel(pick_pos_back, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
 
         movel(self.scan_home, vel=VELOCITY, acc=ACC)
@@ -165,13 +168,34 @@ class RoobotControlNode(Node):
         
         future = self.scan_qr.call_async(req)
 
-        while rclpy.ok() and not future.done():
-            time.sleep(0.05)
+        num = 0
 
+        while rclpy.ok() and not future.done():
+            wait(3)
+            if future.done():
+                break
+            if num == 0:
+                movel([0, 60, 0, 0, 0, 0], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
+                num = 1
+            else:
+                movel([0, -60, 0, 0, 0, 0], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
+                num = 0
+
+            wait(3)
+            if future.done():
+                break
+            movel([0, 0, 0, 0, 0, 179], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
+            wait(3)
+            if future.done():
+                break
+            movel([0, 0, 0, 0, 0, -179], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
+
+        qr_data = None
         try:
             response = future.result()
             if response and response.success: 
                 self.get_logger().info("QR 스캔 및 카운팅 성공!")
+                qr_data = response.qr_data 
                 result = True
             else:
                 self.get_logger().warn("QR 인식 실패 또는 매칭되는 코드가 없습니다.")
@@ -180,7 +204,7 @@ class RoobotControlNode(Node):
             self.get_logger().error(f"QR 스캔 서비스 통신 중 에러 발생: {e}")
             result = False
 
-        return result
+        return result, qr_data
 
     def execute_callback(self, goal_handle):
         result = RobotPickPlace.Result()
@@ -212,9 +236,10 @@ class RoobotControlNode(Node):
             return result
         
         elif behavior == "QR_SCAN":
-            success = self.trigger_qr_scan()
+            success, qr_data = self.trigger_qr_scan()
             if success:
                 result.success = True
+                result.qr_data = qr_data
                 goal_handle.succeed()
             else:
                 result.success = False
@@ -222,7 +247,14 @@ class RoobotControlNode(Node):
             return result
         
         elif behavior == "PLACE_BASKET":
-            pass
+            movel(self.basket_up, vel=VELOCITY, acc=ACC)
+            movel(self.basket_down, vel=VELOCITY, acc=ACC)
+            self.gripper.open_gripper()
+            movel(self.basket_up, vel=VELOCITY, acc=ACC)
+            result.success = True
+            goal_handle.succeed()
+            return result
+
 
         else:
             self.get_logger().warn("알 수 없는 명령입니다.")
@@ -240,8 +272,8 @@ def main(args=None):
     DR_init.__dsr__node = node
 
     try:
-        global get_current_posx, movej, movel, wait, DR_MV_MOD_REL, posx, posj
-        from DSR_ROBOT2 import get_current_posx, movej, movel, wait, DR_MV_MOD_REL
+        global get_current_posx, get_current_posj, movej, movel, wait, DR_MV_MOD_REL, posx, posj, DR_TOOL
+        from DSR_ROBOT2 import get_current_posx, get_current_posj, movej, movel, wait, DR_MV_MOD_REL, DR_TOOL
         from DR_common2 import posx, posj
     except ImportError as e:
         print(f"두산로봇 라이브러리(DSR_ROBOT2) 임포트 오류 발생: {e}")
@@ -265,7 +297,6 @@ def main(args=None):
         robot_control_node.destroy_node()
         node.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == "__main__":
     main()

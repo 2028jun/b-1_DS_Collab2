@@ -314,18 +314,15 @@ class GripperVisionNode(Node):
     def pixel_to_camera_point(self, x, y):
         """픽셀 좌표와 depth를 카메라 기준 3D 좌표로 변환합니다."""
         if self.rs_depth_frame is None or self.fx == 0.0 or self.fy == 0.0:
-            self.get_logger().warn('15648415687sdfsdfsdf')
             return None
 
         height, width = self.rs_depth_frame.shape[:2]
         if not (0 <= x < width and 0 <= y < height):
-            self.get_logger().warn('1564523145')
             return None
 
         z = float(self.rs_depth_frame[y, x])
         if z <= 0:
             self.get_logger().warn(f'{z}')
-            self.get_logger().warn('fsdjhfusihfiuwefnjo')
             return None
 
         # 핀홀 카메라 모델 공식으로 픽셀 좌표를 카메라 기준 x, y, z 좌표로 변환

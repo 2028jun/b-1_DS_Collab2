@@ -1,5 +1,3 @@
-string product_name   # 최신화할 상품 
-int32 quantity         # 수량 목록
-string type             # 연산 타입 ("출고" 또는 "입고")
+string qr_data
 ---
 bool success            # DB 최신화 완료 여부
