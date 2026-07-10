@@ -4,7 +4,7 @@ from rclpy.action import ActionClient
 from store_interfaces.srv import OrderProduct, UpdateInventory, AdminAuth
 from store_interfaces.action import RobotPickPlace
 from std_msgs.msg import String, Empty
-import time
+from time import time
 try:
     from dsr_msgs2.srv import MoveStop
     MOVE_STOP_IMPORT_ERROR = None
@@ -169,20 +169,16 @@ class MainManagerNode(Node):
         self.trigger_move_robot(behavior_name="QR_SCAN", next_step_callback=self.trigger_place_basket)
     
     def trigger_place_basket(self):     # 장바구니에 물품 놓기
-        # self.trigger_move_robot(behavior_name="PLACE_BASKET", next_step_callback=self.trigger_update_inventory)
-        self.trigger_move_robot(behavior_name="PLACE_BASKET", next_step_callback=self.complete_item_loop)
+        self.trigger_move_robot(behavior_name="PLACE_BASKET", next_step_callback=self.trigger_update_inventory)
 
     def trigger_update_inventory(self):    # 재고 업데이트 요청
-        current_target_name = self.total_target_list[self.current_loop_index]
         if not self.srv_database.wait_for_service(timeout_sec=3.0):
             self.get_logger().error("재고 업데이트 서버가 켜져있지 않습니다.")
             return
 
         self.get_logger().info("재고 업데이트 요청 중...")
         request = UpdateInventory.Request()
-        request.product_name = current_target_name
-        request.quantity = 1
-        request.type = "출고" 
+        request.qr_data = self.qr_data
         
         update_future = self.srv_database.call_async(request)
         update_future.add_done_callback(self.update_inventory_callback)
@@ -225,7 +221,13 @@ class MainManagerNode(Node):
             lambda f: self.action_response_handler(f, behavior_name, next_step_callback)
         )
 
-    def action_response_handler(self, future, action_name, next_step_callback):   
+    def action_response_handler(self, future, action_name, next_step_callback):   # 로봇 동작 완료 후 다음 단계로 넘어가기 위한 처리
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().error(f"로봇 {action_name} 요청 거부됨")
+            return
+
+        # 수락되었다면 완료 결과에 콜백 연결def action_response_handler(self, future, action_name, next_step_callback):   
         # 로봇 동작 완료 후 다음 단계로 넘어가기 위한 처리
         goal_handle = future.result()
         if not goal_handle.accepted:
@@ -264,7 +266,7 @@ class MainManagerNode(Node):
         # 4. 진짜 실패인 경우
         else:
             self.get_logger().error(f"'{action_name}' 동작 실패 (Status: {action_result.status})")
-            self.robot_busy = False 
+            self.robot_busy = False # 실제 오류일 때만 작업을 종료시킴
             
     def emergency_stop_callback(self, msg):
         self.last_hand_detected_time = time.time()
@@ -297,17 +299,18 @@ class MainManagerNode(Node):
     def check_resume_condition(self):
         if self.emergency_mode:
             if (time.time() - self.last_hand_detected_time > 3.0):
-                self.get_logger().info("비상 정지 해제: 작업 재개 시도...")
+                self.get_logger().info("비상 정지 해제: 작업 재개...")
                 
                 # 1. 로봇 제어부 재개 신호
-                self.resume_pub.publish(Empty())
+                if not self.has_sent_resume:
+                    self.resume_pub.publish(Empty())
+                    self.has_sent_resume = True
                 
                 # 2. 비상 모드 해제
                 self.emergency_mode = False
-                self.has_sent_resume = False 
-
-                # 3. [중요] 재개 확인 로그
-                self.get_logger().info("로봇이 동작을 재개합니다. 대기 상태를 유지합니다.")
+                
+        else:
+            self.has_sent_resume = False
 
 def main(args=None):
     rclpy.init(args=args)
