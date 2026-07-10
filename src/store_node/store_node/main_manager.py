@@ -3,6 +3,7 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from store_interfaces.srv import OrderProduct, UpdateInventory, AdminAuth
 from store_interfaces.action import RobotPickPlace
+from std_msgs.msg import String
 
 class MainManagerNode(Node):
     def __init__(self):
@@ -15,6 +16,16 @@ class MainManagerNode(Node):
         self.qr_data = None # QR 데이터
         self.robot_busy = False
 
+        # 현재 사용자 / 관리자 모드 퍼블리시
+        self.auth_pub = self.create_publisher(String, '/store_state', 10)
+
+        # 퍼블리시 타이머
+        self.publish_cooldown = 0.5  
+        self.auth_timer = self.create_timer(
+            self.publish_cooldown, 
+            self.publish_auth_mode_callback
+        )
+        # ---------------------------------------------------------------------------------------------------------
         # 서비스 서버
         self.srv_kiosk = self.create_service(     # 주문 접수
             OrderProduct, 
@@ -37,6 +48,12 @@ class MainManagerNode(Node):
         self.robot_action_client = ActionClient(self, RobotPickPlace, '/pickup_and_place')  # 로봇의 동작 요청
 
         self.get_logger().info("메인 매니저 노드 시작")
+
+    def publish_auth_mode_callback(self):
+        """타이머 주기에 맞춰 현재 시스템 모드를 상시 퍼블리시합니다."""
+        msg = String()
+        msg.data = f'{self.system_mode}, {self.robot_busy}'
+        self.auth_pub.publish(msg)
     
     def AdminAuth_callback(self, request, response):    # 음성 비밀번호 일치 및 키 카드 인식 성공(다른 노드에서 진행) 후 모드 변경
         if request.requested_mode == "ADMIN":
@@ -80,6 +97,8 @@ class MainManagerNode(Node):
                 self.get_logger().error('주문 서버가 응답하지 않습니다.')
                 response.success = False
                 return response
+
+            self.robot_busy = True
             
             self.process_next_item_loop()  # 주문 처리 루프 시작
 
@@ -95,10 +114,10 @@ class MainManagerNode(Node):
             return response
     
     def process_next_item_loop(self):   # 주문 처리 루프 : 스캔지점 이동 -> 물품 스캔 -> 물품 옮기기 -> QR 스캔 -> 장바구니 놓기 -> 재고 업데이트
+        self.qr_data = None
         if self.current_loop_index >= len(self.total_target_list):  # 모든 물품 처리를 완료했을 때
             self.get_logger().info("모든 물품을 장바구니에 담았습니다")
             self.trigger_move_robot(behavior_name="MOVE_HOME", next_step_callback=self.move_home_done)
-            self.robot_busy = False
             return
 
         current_target_name = self.total_target_list[self.current_loop_index]   # 현재 처리할 물품 이름
@@ -115,20 +134,16 @@ class MainManagerNode(Node):
         self.trigger_move_robot(behavior_name="QR_SCAN", next_step_callback=self.trigger_place_basket)
     
     def trigger_place_basket(self):     # 장바구니에 물품 놓기
-        # self.trigger_move_robot(behavior_name="PLACE_BASKET", next_step_callback=self.trigger_update_inventory)
-        self.trigger_move_robot(behavior_name="PLACE_BASKET", next_step_callback=self.complete_item_loop)
+        self.trigger_move_robot(behavior_name="PLACE_BASKET", next_step_callback=self.trigger_update_inventory)
 
     def trigger_update_inventory(self):    # 재고 업데이트 요청
-        current_target_name = self.total_target_list[self.current_loop_index]
         if not self.srv_database.wait_for_service(timeout_sec=3.0):
             self.get_logger().error("재고 업데이트 서버가 켜져있지 않습니다.")
             return
 
         self.get_logger().info("재고 업데이트 요청 중...")
         request = UpdateInventory.Request()
-        request.product_name = current_target_name
-        request.quantity = 1
-        request.type = "출고" 
+        request.qr_data = self.qr_data
         
         update_future = self.srv_database.call_async(request)
         update_future.add_done_callback(self.update_inventory_callback)
@@ -156,6 +171,7 @@ class MainManagerNode(Node):
 
     def move_home_done(self):
         self.get_logger().info(f"초기 위치 이동 완료")
+        self.robot_busy = False
 
     def trigger_move_robot(self, behavior_name, next_step_callback, object_name=""):
         goal_msg = RobotPickPlace.Goal()

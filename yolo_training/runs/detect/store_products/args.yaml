@@ -13,7 +13,7 @@ cache: false
 device: ''
 workers: 8
 project: runs/detect
-name: store_products-3
+name: store_products
 exist_ok: false
 pretrained: true
 optimizer: auto
@@ -108,4 +108,4 @@ auto_augment: randaugment
 erasing: 0.4
 cfg: null
 tracker: tracktrack.yaml
-save_dir: C:\Users\user\runs\detect\runs\detect\store_products-3
+save_dir: C:\Users\user\runs\detect\runs\detect\store_products

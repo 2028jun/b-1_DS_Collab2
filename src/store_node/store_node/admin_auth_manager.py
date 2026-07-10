@@ -1,8 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.action import ActionClient
-from store_interfaces.srv import AdminAuth, FineTuneQr, StartAdminAuth
-from store_interfaces.action import RobotPickPlace
+from store_interfaces.srv import AdminAuth, StartAdminAuth
 from std_msgs.msg import Bool
 
 class AdminAuthManagerNode(Node):
@@ -21,6 +19,12 @@ class AdminAuthManagerNode(Node):
 
     def start_auth_callback(self, request, response):       # 음성 인식 노드로부터 모드 변경 요청을 받았을 때
         req = AdminAuth.Request()
+
+        if not self.cli_main_mode.wait_for_service(timeout_sec=2.0):
+            self.get_logger().error("❌ 메인 매니저 모드 변경 서버가 응답하지 않습니다.")
+            response.success = False
+            return response
+
         if "사용자" in request.voice_text:      # 음성으로 사용자 모드 수신
             req.requested_mode = "SERVICE"
             self.is_auth_active = False
