@@ -2,3 +2,4 @@ string[] product_name   # 주문 상품 목록
 int32[] quantity         # 주문 수량
 ---
 bool success    # 수신 완료 신호
+string detected_object  # 처리하는 물품

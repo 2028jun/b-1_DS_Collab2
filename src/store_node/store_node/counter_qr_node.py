@@ -2,7 +2,7 @@ import time
 import cv2
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String 
+from std_msgs.msg import String, Bool
 
 class CounterQrNode(Node):
     """C270 카메라로 계산대 QR을 상시 감시하고 인식 시 토픽을 발행하는 노드입니다."""
@@ -11,7 +11,7 @@ class CounterQrNode(Node):
         super().__init__('counter_qr_node')
 
         self.qr_detector = cv2.QRCodeDetector()
-        self.webcam_index = self.declare_parameter('webcam_index', 3).value
+        self.webcam_index = self.declare_parameter('webcam_index', 9).value
         self.show_counter_camera = self.declare_parameter('show_counter_camera', True).value
         
         self.detect_interval = 0.1  # 0.1초에 한 번씩만 QR 디코딩 진행 (CPU 보호)
@@ -34,8 +34,17 @@ class CounterQrNode(Node):
             cv2.moveWindow('Counter C270 View', 700, 50)
 
         self.is_robot_busy = False
+        self.admin_is_robot_busy = False
 
         self.auth_sub = self.create_subscription(String, '/store_state', self.auth_mode_callback, 10)
+        self.admin_state_sub = self.create_subscription(Bool, '/admin_state', self.admin_state_callback, 10)
+
+    def admin_state_callback(self, msg):
+        try:
+
+            self.admin_is_robot_busy = msg.data
+        except Exception as e:
+            self.get_logger().error(f"마스터 상태 토픽 파싱 에러: {e}")
 
     def auth_mode_callback(self, msg):
         try:
@@ -72,8 +81,12 @@ class CounterQrNode(Node):
             if self.is_robot_busy is True:    # 로봇이 QR 찍을 때
                 self.qr_pub_robot.publish(msg)  
                 self.get_logger().info(f'QR 코드 인식 및 전송 성공(로봇): {data}')
-            else:                                   # 사람이 직접 QR 찍을 때
+            elif self.admin_is_robot_busy is True:         # 사람이 직접 QR 찍을 때 or 입고
                 self.qr_pub_db.publish(msg)
+                self.qr_pub_robot.publish(msg)  
+                self.get_logger().info(f'QR 코드 인식 및 전송 성공(입고): {data}')
+            else:
+                self.qr_pub_robot.publish(msg)  
                 self.get_logger().info(f'QR 코드 인식 및 전송 성공(직접): {data}')
 
     def destroy_node(self):

@@ -22,20 +22,16 @@ class ModeClassifier:
 당신은 편의점 음성 주문 시스템의 모드 분류기입니다.
 
 <목표>
-사용자의 음성을 아래 둘 중 하나로 분류하세요.
+사용자의 음성을 아래 셋 중 하나로 분류하세요.
 
-ADMIN
-- 관리자 모드 진입
-- 운영자 모드 진입
-- 관리자 로그인
-- 관리자 인증
-- 운영자 로그인
-- 관리자 설정
-- 관리자 권한
-- STT 오인식이 있어도 관리자 의도라면 ADMIN으로 판단하세요.
-- '걸리죠 모두'와 같은 발음 오인식도 관리자 의도로 판단 가능하면 ADMIN으로 분류하세요.
-- '관리자'라는 단어가 포함되어 있으면 ADMIN으로 분류하세요.
-- '멀리서 모드'와 같은 발음 오인식도 관리자 의도로 판단 가능하면 ADMIN으로 분류하세요.
+WAREHOUSING
+- 입고 모드
+- 입고 시작
+- 입고 해줘
+- 물품 넣어줘
+- STT 오인식이 있어도 입고 의도로 판단되면 WAREHOUSING로 분류하세요.
+- '입고'라는 단어가 포함되어 있으면 WAREHOUSING로 분류하세요.
+- 비슷한 발음 오인식도 서비스/사용자 의도로 판단 가능하면 WAREHOUSING로 분류하세요
 
 SERVICE
 - 관리자 모드 해제
@@ -60,7 +56,7 @@ ORDER
 
 반드시 JSON만 출력하세요.
 
-{{"mode":"ADMIN"}}
+{{"mode":"WAREHOUSING"}}
 
 또는
 
@@ -100,7 +96,7 @@ ORDER
 
             mode = result.get("mode", "ORDER")
 
-            if mode not in ["ADMIN", "ORDER", "SERVICE"]:
+            if mode not in ["WAREHOUSING", "ORDER", "SERVICE"]:
                 mode = "ORDER"
 
             print("\n[Mode Classification]")

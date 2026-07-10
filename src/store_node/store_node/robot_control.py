@@ -1,4 +1,6 @@
 import os
+from dsr_msgs2.srv import MoveStop
+from std_msgs.msg import Empty
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
@@ -17,7 +19,7 @@ import DR_init
 # 두산 로봇 설정 전역 변수
 ROBOT_ID = "dsr01"
 ROBOT_MODEL = "m0609"
-VELOCITY, ACC = 50, 50
+VELOCITY, ACC = 75, 100
 
 GRIPPER_NAME = "rg2"
 TOOLCHARGER_IP = "192.168.1.1"
@@ -45,6 +47,15 @@ class RoobotControlNode(Node):
             'scan_counter_qr',
         )
 
+        self.is_paused = False # 비상 정지 상태 플래그
+        
+        # 1. 일시 정지/재개 신호 구독
+        self.create_subscription(Empty, '/robot_pause', self.pause_callback, 10)
+        self.create_subscription(Empty, '/robot_resume', self.resume_callback, 10)
+        
+        # 2. 하드웨어 긴급 정지 서비스 (기존 서비스 클라이언트 활용)
+        self.move_stop_client = self.create_client(MoveStop, '/dsr01/motion/move_stop')
+
         self.qr_sub_robot = self.create_subscription(String, '/counter_qr_data_robot', self.qr_sub_robot_callback, 10)
 
         self.img_node = ImgNode()
@@ -61,8 +72,10 @@ class RoobotControlNode(Node):
         
         self.is_processing = False  # 작업 중 중복 요청 방지용 플래그
         self.object = None
+        self.found_object = None
         self.last_qr_data = ""
         self.qr_data = ""
+        self.behavior = ""
         
         self.basket_up = posx([336, 427.5, 125.02, 46.75, -180, 140])
         self.basket_down = posx([336, 427.5, -150, 46.75, -180, 140])
@@ -70,11 +83,46 @@ class RoobotControlNode(Node):
         self.scan_home_waypoint = posj([16.62, 24.93, 98.92, 105.82, -102.11, 33.04]) 
         self.home = posj([0, 0, 90, 0, 90, 0]) 
         self.scan_home = posx([485.63, -12.59, 167.73, 88.87, -87.93, -90.68])
+        self.scan_basket_home = posx([244.37, 455.97, 122.31, 44.25, -179.9, 137.25])
+        self.drop_temp1 = posx([571.59, 218.6, 19.29, 5.56, -177.47, -176.95])
+        self.drop_temp2 = posx([269.39, 246.35, 20.45, 7.23, -177.79, -175.19 ])
+        self.drop_center1 = posx([539.25, -468.67, 138.77, 88.99, -88.01, -90.77])  #가운데 아래 안쪽
+        self.drop_center2 = posx([543.36, -409.59, 138.30, 89.00, -88.00, -90.88])  #가운데 아래 바깥쪽
 
         movej(self.home, vel=VELOCITY, acc=ACC) # 로봇 가동시 초기 자세로 이동
         self.gripper.open_gripper()
         self.get_logger().info("robot_control_node 실행")
     
+    def safe_movel(self, target_pos, vel=VELOCITY, acc=ACC, mod=0, ref=None):
+        is_relative_move = (mod == DR_MV_MOD_REL) or (ref is not None)
+
+        while True:
+            # 1. 어느 모드든 일단 정지 명령 확인
+            if self.is_paused:
+                time.sleep(0.5)
+                continue
+            
+            # 2. 절대 좌표(ABS) 도착 판정
+            if not is_relative_move:
+                current_pos = get_current_posx()[0]
+                dist = np.linalg.norm(np.array(list(target_pos)[:3]) - np.array(list(current_pos)[:3]))
+                if dist < 3.0: 
+                    break
+            
+            # 3. 이동 명령 실행
+            movel(target_pos, vel=vel, acc=acc, mod=mod, ref=ref)
+            
+            # 4. 상대 좌표(REL/TOOL)는 한 번만 수행하고 종료
+            if is_relative_move:
+                break
+                
+            time.sleep(0.1)
+
+    def safe_movej(self, pos, vel=VELOCITY, acc=ACC):
+        while self.is_paused:
+            time.sleep(0.5)
+        movej(pos, vel=vel, acc=acc)
+
     def qr_sub_robot_callback(self, msg):
         self.qr_data = msg.data
 
@@ -94,18 +142,18 @@ class RoobotControlNode(Node):
         
         self.get_logger().info("YOLO 비전 노드에 상품 3D 좌표 스캔 요청 전송...")       # 물품 스캔 요청
 
-        wait(1)
+        self.wait_with_pause(1)
         future = self.get_camera_coord.call_async(request)
 
-        while rclpy.ok() and not future.done():  
+        while rclpy.ok() and not future.done():     
             time.sleep(0.05)
-                
     
         camera_center_pos = None
         try:
             response = future.result()  
             if response and response.found:
                 camera_center_pos = (response.offset.x, response.offset.y, response.offset.z)
+                self.found_object = response.detected_name
                 self.get_logger().info(f"비전 수신 성공 -> 카메라 기준 좌표: {camera_center_pos}")
             else:
                 self.get_logger().warn("YOLO가 화면에서 상품을 검출하지 못했습니다.")
@@ -122,7 +170,7 @@ class RoobotControlNode(Node):
             self.get_logger().info(f"변환된 로봇 절대 좌표 (Base): {robot_coordinate}")
 
             self.pick_and_move(*robot_coordinate)
-        
+            
         self.is_processing = False
         return True
 
@@ -144,59 +192,100 @@ class RoobotControlNode(Node):
 
         return td_coord[:3]
 
+    def wait_with_pause(self, seconds):
+        """비상 정지를 감시하며 대기하는 함수"""
+        for _ in range(int(seconds * 10)):
+            if self.is_paused:
+                time.sleep(0.5) # 정지 중이면 0.5초 간격으로 확인
+            else:
+                time.sleep(0.1) # 정상 중이면 0.1초 간격으로 확인
+
     def pick_and_move(self, x, y, z):
         """계산된 절대 좌표로 이동하여 물체를 잡고 놓는 함수"""
         current_pos = get_current_posx()[0]
         pick_pos1 = posx([x, current_pos[1], z, current_pos[3], current_pos[4], current_pos[5]])
         pick_pos2 = posx([x, y, z, current_pos[3], current_pos[4], current_pos[5]])
-        
+
         self.get_logger().info("목표 상공 위치로 이동합니다.")
         self.gripper.open_gripper()
-        movel(pick_pos1, vel=VELOCITY, acc=ACC)
-        movel(pick_pos2, vel=VELOCITY, acc=ACC)
 
-        if self.object == "cup_noodle":
-            pick_pos_front = posx(0, -100, 0, 0, 0, 0)
+        if self.behavior == "SCAN_AND_PICK_WAREHOUSE":
+            self.safe_movel(pick_pos2, vel=VELOCITY, acc=ACC)
+            pick_pos_down = posx(0, 0, -60, 0, 0, 0)
+            self.safe_movel(pick_pos_down, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
+            self.gripper.close_gripper()
+            self.wait_with_pause(3)
+            self.safe_movel(self.basket_up, vel=VELOCITY, acc=ACC)
         else:
-            pick_pos_front = posx(0, -70, 0, 0, 0, 0)
-        movel(pick_pos_front, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
+            self.safe_movel(pick_pos1, vel=VELOCITY, acc=ACC)
+            self.safe_movel(pick_pos2, vel=VELOCITY, acc=ACC)
 
-        self.gripper.close_gripper()
-        wait(2)
+            if self.object == "cup_noodle":
+                pick_pos_front = posx(0, -100, 0, 0, 0, 0)
+            else:
+                pick_pos_front = posx(0, -70, 0, 0, 0, 0)
+            self.safe_movel(pick_pos_front, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
 
-        pick_pos_up = posx(0, 0, 20, 0, 0, 0)
-        movel(pick_pos_up, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
+            self.gripper.close_gripper()
+            self.wait_with_pause(3)
 
-        pick_pos_back = posx(0, 200, 0, 0, 0, 0)
-        movel(pick_pos_back, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
+            pick_pos_up = posx(0, 0, 20, 0, 0, 0)
+            self.safe_movel(pick_pos_up, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
 
-        movel(self.scan_home, vel=VELOCITY, acc=ACC)
+            pick_pos_back = posx(0, 200, 0, 0, 0, 0)
+            self.safe_movel(pick_pos_back, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
+
+            self.safe_movel(self.scan_home, vel=VELOCITY, acc=ACC)
 
     def trigger_qr_scan(self):
         self.get_logger().info("📸 QR 스캔 위치로 이동합니다.")
-        movel(self.qr_home, vel=VELOCITY, acc=ACC) 
+        self.safe_movel(self.qr_home, vel=VELOCITY, acc=ACC)
 
         num = 0
 
         while rclpy.ok() and (self.last_qr_data == self.qr_data):
-            wait(3)
+            self.wait_with_pause(3)
             if self.last_qr_data != self.qr_data:
                 break
             if num == 0:
-                movel([0, 60, 0, 0, 0, 0], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
+                self.safe_movel(
+                    [0, 60, 0, 0, 0, 0],
+                    vel=VELOCITY,
+                    acc=ACC,
+                    mod=DR_MV_MOD_REL,
+                    ref=DR_TOOL,
+                )
                 num = 1
             else:
-                movel([0, -60, 0, 0, 0, 0], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
+                self.safe_movel(
+                    [0, -60, 0, 0, 0, 0],
+                    vel=VELOCITY,
+                    acc=ACC,
+                    mod=DR_MV_MOD_REL,
+                    ref=DR_TOOL,
+                )
                 num = 0
 
-            wait(3)
+            self.wait_with_pause(3)
             if self.last_qr_data != self.qr_data:
                 break
-            movel([0, 0, 0, 0, 0, 179], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
-            wait(3)
+            self.safe_movel(
+                [0, 0, 0, 0, 0, 179],
+                vel=VELOCITY,
+                acc=ACC,
+                mod=DR_MV_MOD_REL,
+                ref=DR_TOOL,
+            )
+            self.wait_with_pause(3)
             if self.last_qr_data != self.qr_data:
                 break
-            movel([0, 0, 0, 0, 0, -179], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
+            self.safe_movel(
+                [0, 0, 0, 0, 0, -179],
+                vel=VELOCITY,
+                acc=ACC,
+                mod=DR_MV_MOD_REL,
+                ref=DR_TOOL,
+            )
 
         self.last_qr_data = self.qr_data
         result = True
@@ -206,23 +295,23 @@ class RoobotControlNode(Node):
     def execute_callback(self, goal_handle):
         result = RobotPickPlace.Result()
 
-        behavior = goal_handle.request.behavior_name
+        self.behavior = goal_handle.request.behavior_name
         object = goal_handle.request.object_name      
 
-        if behavior == "MOVE_HOME":     # 초기 위치 이동 요청받을 때
-            movej(self.home, vel=VELOCITY, acc=ACC)
+        if self.behavior == "MOVE_HOME":     # 초기 위치 이동 요청받을 때
+            self.safe_movej(self.home, vel=VELOCITY, acc=ACC)
             result.success = True
             goal_handle.succeed()
             return result
         
-        elif behavior == "MOVE_SCAN":   # 물품 스캔 지점 이동 요청 받을 때
-            movej(self.scan_home_waypoint, vel=VELOCITY, acc=ACC)
-            movel(self.scan_home, vel=VELOCITY, acc=ACC)
+        elif self.behavior == "MOVE_SCAN":   # 물품 스캔 지점 이동 요청 받을 때
+            self.safe_movej(self.scan_home_waypoint, vel=VELOCITY, acc=ACC)
+            self.safe_movel(self.scan_home, vel=VELOCITY, acc=ACC)
             result.success = True
             goal_handle.succeed()
             return result
         
-        elif behavior == "SCAN_AND_PICK":
+        elif self.behavior == "SCAN_AND_PICK":
             success = self.trigger_scan_and_pick(object)
             if success:
                 result.success = True
@@ -232,7 +321,7 @@ class RoobotControlNode(Node):
                 goal_handle.abort()
             return result
         
-        elif behavior == "QR_SCAN":
+        elif self.behavior == "QR_SCAN":
             success, qr_data = self.trigger_qr_scan()
             if success:
                 result.success = True
@@ -243,21 +332,73 @@ class RoobotControlNode(Node):
                 goal_handle.abort()
             return result
         
-        elif behavior == "PLACE_BASKET":
-            movel(self.basket_up, vel=VELOCITY, acc=ACC)
-            movel(self.basket_down, vel=VELOCITY, acc=ACC)
+        elif self.behavior == "PLACE_BASKET":
+            self.safe_movel(self.basket_up, vel=VELOCITY, acc=ACC)
+            self.safe_movel(self.basket_down, vel=VELOCITY, acc=ACC)
             self.gripper.open_gripper()
-            movel(self.basket_up, vel=VELOCITY, acc=ACC)
+            self.safe_movel(self.basket_up, vel=VELOCITY, acc=ACC)
             result.success = True
             goal_handle.succeed()
             return result
 
+        elif self.behavior == "MOVE_SCAN_BASKET":
+            self.safe_movej(self.scan_home_waypoint, vel=VELOCITY, acc=ACC)
+            self.safe_movel(self.scan_basket_home, vel=VELOCITY, acc=ACC)
+            result.success = True
+            goal_handle.succeed()
+            return result
+        
+        elif self.behavior == "SCAN_AND_PICK_WAREHOUSE":
+            success = self.trigger_scan_and_pick(object="all")
+            if success:
+                result.success = True
+                result.found_object = self.found_object
+                goal_handle.succeed()
+            else:
+                result.success = False
+                goal_handle.abort()
+            return result
+        
+        elif self.behavior == "DROP_TEMP1":
+            self.safe_movel(self.drop_temp1, vel=VELOCITY, acc=ACC)
+            self.gripper.open_gripper()
+            self.wait_with_pause(3)
+            self.safe_movel([0, 0, 50, 0, 0, 0], vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
+            result.success = True
+            goal_handle.succeed()
+            return result
+        
+        elif self.behavior == "DROP_TEMP2":
+            self.safe_movel(self.drop_temp2, vel=VELOCITY, acc=ACC)
+            self.gripper.open_gripper()
+            self.wait_with_pause(3)
+            self.safe_movel([0, 0, 50, 0, 0, 0], vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
+            result.success = True
+            goal_handle.succeed()
+
+            return result
 
         else:
             self.get_logger().warn("알 수 없는 명령입니다.")
             result.success = False
             goal_handle.abort()
             return result 
+        
+    def pause_callback(self, msg):
+        self.is_paused = True
+        self.get_logger().error("로봇 제어부: 일시 정지 명령 수신!")
+        # 두산 로봇 즉시 정지 API 호출 (필요 시)
+        # 로봇이 현재 이동 중이라면 강제 정지가 필요합니다.
+        # 실제 두산 API의 긴급 정지(MoveStop)를 여기에 호출하세요.
+
+    def resume_callback(self, msg):
+        # 만약 이미 정지 상태가 아니라면(이미 재개된 상태라면) 그냥 무시
+        if not self.is_paused:
+            return 
+            
+        # 처음 한 번만 실행됨
+        self.is_paused = False
+        self.get_logger().info("로봇 제어부: 동작 재개!")
 
 def main(args=None):
     """프로그램 실행의 핵심 진입점이 되는 메인 함수"""

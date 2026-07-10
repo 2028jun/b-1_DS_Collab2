@@ -5,7 +5,7 @@ from rclpy.node import Node
 from std_msgs.msg import String 
 import json
 
-from store_interfaces.srv import UpdateInventory 
+from store_interfaces.srv import UpdateInventory, CheckStock
 
 class DatabaseNode(Node):
     def __init__(self):
@@ -20,6 +20,8 @@ class DatabaseNode(Node):
         self.qr_sub_db = self.create_subscription(String, '/counter_qr_data_db', self.qr_sub_db_callback, 10)     # 사람으로 부터 온 QR 데이터
 
         self.auth_sub = self.create_subscription(String, '/store_state', self.auth_sub_callback, 10)
+
+        self.check_stock = self.create_service(CheckStock, '/check_stock', self.handle_check_all_stock)  # 재고 확인 요청
 
         self.last_qr_data = None
         self.qr_data = None
@@ -40,7 +42,35 @@ class DatabaseNode(Node):
         except Exception as e:
             self.get_logger().error(f"❌ 데이터베이스 연결 실패! 에러 내용: {e}")
             raise e # 연결 실패 시 노드 실행 강제 중단
-    
+        
+    def handle_check_all_stock(self, request, response):
+        response.inventory_json = "{}"
+        response.success = False
+
+        sql_select_all = """
+            SELECT *
+            FROM products;
+        """
+        try:
+            with self.conn.cursor() as cursor:
+                cursor.execute(sql_select_all)
+                # DictCursor이므로 [{'name': 'coffee', 'stock': 5}, {'name': 'snack', 'stock': 2}] 형태로 가져옴
+                rows = cursor.fetchall() 
+
+                if rows:
+                    response.inventory_json = json.dumps(rows, ensure_ascii=False)
+                    response.success = True
+                else:
+                    response.inventory_json = json.dumps([], ensure_ascii=False)
+                    response.success = True
+                    self.get_logger().warn("⚠️ 현재 products 테이블이 완전히 비어있습니다.")
+
+        except Exception as e:
+            self.get_logger().error(f"❌ 전체 재고 쿼리 조회 중 SQL 에러 발생: {e}")
+            response.success = False
+
+        return response
+
     def auth_sub_callback(self, msg):
         parts = msg.data.split(',')
         self.auth_status = parts[0].strip()

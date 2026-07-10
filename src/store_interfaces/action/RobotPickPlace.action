@@ -5,4 +5,5 @@ string object_name     # 로봇이 잡을 물품 이름
 # 2. Result (최종 완료 결과)
 bool success
 string qr_data # QR 스캔시 전달할 데이터
+string found_object  # 검출된 물품
 ---
