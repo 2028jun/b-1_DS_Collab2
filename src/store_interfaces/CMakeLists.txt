@@ -26,6 +26,7 @@ set(srv_files
   "srv/DetectProduct.srv"
   "srv/FineTuneQr.srv"
   "srv/ScanCounterQr.srv"
+  "srv/GetSalesAnalytics.srv"
 )
 
 set(action_files

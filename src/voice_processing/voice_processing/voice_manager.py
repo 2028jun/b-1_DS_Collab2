@@ -9,7 +9,7 @@ from voice_processing.STT import STT
 from voice_processing.ModeClassifier import ModeClassifier
 from voice_processing.OrderProcessor import OrderProcessor
 
-from store_interfaces.srv import StartAdminAuth, OrderProduct
+from store_interfaces.srv import GetSalesAnalytics, StartAdminAuth, OrderProduct
 
 class VoiceManagerNode(Node):
     def __init__(self):
@@ -25,7 +25,7 @@ class VoiceManagerNode(Node):
         if openai_api_key is None:
             raise ValueError("OPENAI_API_KEY가 .env 파일에서 로드되지 않았습니다.")
         
-        self.PC_MIC_INDEX = 5
+        self.PC_MIC_INDEX = 0
             
         self.stt = STT(openai_api_key, device_index=self.PC_MIC_INDEX)
         self.wakeup = WakeupWord()
@@ -35,6 +35,11 @@ class VoiceManagerNode(Node):
         self.cli_admin_auth = self.create_client(StartAdminAuth, '/start_admin_auth')
 
         self.cli_order_product = self.create_client(OrderProduct, '/order_product')
+
+        self.cli_sales_analytics = self.create_client(
+            GetSalesAnalytics,
+            '/analyze_sales',
+        )
 
         self.is_woken_up = False
         
@@ -58,6 +63,11 @@ class VoiceManagerNode(Node):
                 self.is_woken_up = False
                 return
             
+            if self.is_sales_status_command(command_text):
+                self.request_sales_analytics(command_text)
+                self.is_woken_up = False
+                return
+
             mode = self.mode_classifier.classify(command_text)  # 주문 or 모드 변경 판별
             
             if mode == "ADMIN":
@@ -99,6 +109,53 @@ class VoiceManagerNode(Node):
         req.quantity = list(parsed_order.values())       # [2, 1]
         
         self.cli_order_product.call_async(req) # 비동기로 던지기
+
+    def is_sales_status_command(self, text):
+        normalized_text = text.replace(' ', '')
+        sales_commands = [
+            '판매현황알려줘',
+            '오늘매출알려줘',
+        ]
+
+        return normalized_text in sales_commands
+
+    def get_sales_period_from_text(self, text):
+        normalized_text = text.replace(' ', '')
+
+        if normalized_text == '오늘매출알려줘':
+            return 'today'
+
+        return 'all'
+
+    def request_sales_analytics(self, voice_text):
+        if not self.cli_sales_analytics.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error("판매 분석 노드가 켜져있지 않습니다.")
+            return
+
+        period = self.get_sales_period_from_text(voice_text)
+
+        req = GetSalesAnalytics.Request()
+        req.period = period
+        req.use_ai = True
+
+        self.get_logger().info(f"판매 현황 분석 요청: period={period}")
+        future = self.cli_sales_analytics.call_async(req)
+        future.add_done_callback(self.sales_analytics_callback)
+
+    def sales_analytics_callback(self, future):
+        try:
+            response = future.result()
+        except Exception as e:
+            self.get_logger().error(f"판매 분석 서비스 통신 중 오류 발생: {e}")
+            return
+
+        if not response.success:
+            self.get_logger().error(
+                f"판매 분석 실패: {response.error_message}"
+            )
+            return
+
+        self.get_logger().info(f"판매 현황 요약: {response.summary}")
 
 def main(args=None):
     rclpy.init(args=args)

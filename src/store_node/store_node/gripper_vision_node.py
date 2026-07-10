@@ -9,6 +9,7 @@ from geometry_msgs.msg import Point
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image
 from store_interfaces.srv import FineTuneQr
+from std_msgs.msg import Bool, Empty
 
 try:
     from ultralytics import YOLO
@@ -68,6 +69,25 @@ class GripperVisionNode(Node):
         self.conf_threshold = self.declare_parameter('conf_threshold', 0.5).value
         self.detect_interval = self.declare_parameter('detect_interval', 0.5).value
         self.last_detect_time = 0.0
+        self.last_emergency_stop_time = 0.0
+
+        self.hand_classes_text = self.declare_parameter(
+            'hand_classes',
+            'hand',
+        ).value
+        self.hand_classes = {
+            class_name.strip().lower()
+            for class_name in self.hand_classes_text.split(',')
+            if class_name.strip()
+        }
+        self.hand_conf_threshold = self.declare_parameter(
+            'hand_conf_threshold',
+            0.5,
+        ).value
+        self.emergency_stop_cooldown = self.declare_parameter(
+            'emergency_stop_cooldown',
+            1.0,
+        ).value
 
         self.target_class = self.declare_parameter('target_class', '').value
         # 그리퍼 인식 X
@@ -91,6 +111,12 @@ class GripperVisionNode(Node):
         self.rs_depth_frame = None
         self.latest_detections = []
         self.realsense_window_name = 'RealSense Gripper View'
+
+        self.emergency_stop_pub = self.create_publisher(
+            Empty,
+            '/emergency_stop',
+            10,
+        )
 
         self.model = self.load_yolo_model(self.model_path)
 
@@ -125,6 +151,13 @@ class GripperVisionNode(Node):
             self.handle_fine_tune_qr,
         )
 
+        self.scan_key_card = self.create_publisher(Bool, 'key_card', 10)
+
+        self.detection_timer = self.create_timer(
+            self.detect_interval,
+            self.update_detections_for_display,
+        )
+
         self.realsense_status_timer = None
         if self.show_realsense_status:
             self.realsense_status_timer = self.create_timer(
@@ -137,6 +170,11 @@ class GripperVisionNode(Node):
             self.get_logger().info(
                 f'Ignoring YOLO classes: {sorted(self.ignore_classes)}'
             )
+        if self.hand_classes:
+            self.get_logger().info(
+                f'Hand emergency classes: {sorted(self.hand_classes)}'
+            )
+
 
     def load_yolo_model(self, model_path):
         """Ultralytics YOLO 모델을 로드"""
@@ -190,12 +228,14 @@ class GripperVisionNode(Node):
         if not self.show_realsense or self.rs_color_frame is None:
             return
 
-        self.update_detections_for_display()
         frame = self.rs_color_frame.copy()
         for det in self.latest_detections:
             x1, y1, x2, y2 = det['box']
             label = f"{det['name']} {det['score']:.2f}"
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            box_color = (0, 0, 255) if det.get('is_hand') else (0, 255, 0)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
+            if det.get('is_hand'):
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
             cv2.circle(frame, det['center'], 4, (0, 0, 255), -1)
             cv2.putText(
                 frame,
@@ -206,6 +246,11 @@ class GripperVisionNode(Node):
                 (0, 255, 0),
                 2,
             )
+
+            if det['name'] == "card":       # 키 카드 인식 시 True를 퍼블리시
+                msg = Bool()
+                msg.data = True
+                self.scan_key_card.publish(msg)
 
         cv2.imshow(self.realsense_window_name, frame)
         cv2.waitKey(1)
@@ -272,19 +317,42 @@ class GripperVisionNode(Node):
             return None
 
         frame = self.rs_color_frame.copy()
-        results = self.model(frame, conf=self.conf_threshold, verbose=False)
+        inference_conf = min(self.conf_threshold, self.hand_conf_threshold)
+        results = self.model(frame, conf=inference_conf, verbose=False)
         if not results:
             self.latest_detections = []
             return None
 
         result = results[0]
-        detections = []
+        display_detections = []
+        product_detections = []
         names = result.names
 
         for box in result.boxes:
             score = float(box.conf[0])
             class_id = int(box.cls[0])
             name = names.get(class_id, str(class_id))
+            normalized_name = name.lower()
+            is_hand = normalized_name in self.hand_classes
+
+            x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
+            cx = int((x1 + x2) / 2)
+            cy = int((y1 + y2) / 2)
+            detection = {
+                'box': (x1, y1, x2, y2),
+                'center': (cx, cy),
+                'name': name,
+                'score': score,
+                'is_hand': is_hand,
+            }
+
+            if is_hand and score >= self.hand_conf_threshold:
+                self.publish_emergency_stop(name, score)
+                display_detections.append(detection)
+                continue
+
+            if score < self.conf_threshold:
+                continue
 
             # gripper처럼 로봇 부품으로 학습된 클래스는 상품으로 쓰지 않도록 제외
             if name in self.ignore_classes:
@@ -294,23 +362,26 @@ class GripperVisionNode(Node):
             if self.target_class and name != self.target_class:
                 continue
 
-            x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
-            cx = int((x1 + x2) / 2)
-            cy = int((y1 + y2) / 2)
-            detections.append(
-                {
-                    'box': (x1, y1, x2, y2),
-                    'center': (cx, cy),
-                    'name': name,
-                    'score': score,
-                }
-            )
+            display_detections.append(detection)
+            product_detections.append(detection)
 
-        self.latest_detections = detections
-        if not detections:
+        self.latest_detections = display_detections
+        if not product_detections:
             return None
 
-        return max(detections, key=lambda det: det['score'])
+        return max(product_detections, key=lambda det: det['score'])
+
+    def publish_emergency_stop(self, class_name, score):
+        now = time.time()
+        if (now - self.last_emergency_stop_time) < self.emergency_stop_cooldown:
+            return
+
+        self.last_emergency_stop_time = now
+        self.emergency_stop_pub.publish(Empty())
+        self.get_logger().error(
+            f'Human hand detected: {class_name} score={score:.2f}. '
+            'Published /emergency_stop.'
+        )
 
     def pixel_to_camera_point(self, x, y):
         """픽셀 좌표와 depth를 카메라 기준 3D 좌표로 변환합니다."""

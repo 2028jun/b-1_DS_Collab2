@@ -29,6 +29,7 @@ setup(
             'main_manager = store_node.main_manager:main',
             'robot_control = store_node.robot_control:main',
             'database_manager = store_node.database_manager:main',
+            'db_ai_analytics_manager = store_node.db_ai_analytics_manager:main',
             'admin_auth_manager = store_node.admin_auth_manager:main',
             'api_server = store_node.main:main',
             'counter_qr_node = store_node.counter_qr_node:main',

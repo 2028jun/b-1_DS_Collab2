@@ -1,8 +1,16 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
-from store_interfaces.srv import OrderProduct, UpdateInventory, DetectProduct, AdminAuth
+from store_interfaces.srv import OrderProduct, UpdateInventory, AdminAuth
 from store_interfaces.action import RobotPickPlace
+from std_msgs.msg import Empty
+
+try:
+    from dsr_msgs2.srv import MoveStop
+    MOVE_STOP_IMPORT_ERROR = None
+except ImportError as exc:
+    MoveStop = None
+    MOVE_STOP_IMPORT_ERROR = exc
 
 class MainManagerNode(Node):
     def __init__(self):
@@ -13,6 +21,11 @@ class MainManagerNode(Node):
         self.total_target_list = [] # 처리해야할 남은 물품
         self.system_mode = "SERVICE"  # 주문 모드
         self.qr_data = None # QR 데이터
+        self.robot_busy = False
+        self.current_goal_handle = None
+        self.create_subscription(Empty, '/emergency_stop', self.emergency_stop_callback, 1)
+        self.move_stop_clients = self.create_move_stop_clients()
+        self.emergency_mode = False
 
         # 서비스 서버
         self.srv_kiosk = self.create_service(     # 주문 접수
@@ -36,6 +49,21 @@ class MainManagerNode(Node):
         self.robot_action_client = ActionClient(self, RobotPickPlace, '/pickup_and_place')  # 로봇의 동작 요청
 
         self.get_logger().info("메인 매니저 노드 시작")
+
+    def create_move_stop_clients(self):
+        if MoveStop is None:
+            self.get_logger().warn(
+                f"MoveStop 서비스를 사용할 수 없습니다: {MOVE_STOP_IMPORT_ERROR}"
+            )
+            return []
+
+        return [
+            ('/motion/move_stop', self.create_client(MoveStop, '/motion/move_stop')),
+            (
+                '/dsr01/motion/move_stop',
+                self.create_client(MoveStop, '/dsr01/motion/move_stop'),
+            ),
+        ]
     
     def AdminAuth_callback(self, request, response):    # 음성 비밀번호 일치 및 키 카드 인식 성공(다른 노드에서 진행) 후 모드 변경
         if request.requested_mode == "ADMIN":
@@ -61,8 +89,13 @@ class MainManagerNode(Node):
         
         return response
         
-    def order_product_callback(self, request, response):    # 키오스크 화면 및 음성 주문 접수시 실행
-        if self.system_mode == "SERVICE":       # 주문 모드일 때
+    def order_product_callback(self, request, response):
+        if self.emergency_mode:
+            self.get_logger().warn("비상 정지 상태입니다. 주문을 접수할 수 없습니다.")
+            response.success = False
+            return response
+            # 키오스크 화면 및 음성 주문 접수시 실행
+        if self.system_mode == "SERVICE" and not self.robot_busy :       # 주문 모드일 때
             self.order_items_list = request.product_name  # 주문 상품 목록 저장
             self.order_quantities_list = request.quantity  # 주문 수량 목록 저장
             self.current_loop_index = 0     # 주문 처리 인덱스 초기화
@@ -86,7 +119,10 @@ class MainManagerNode(Node):
 
             return response
         else:           # 관리자 모드일 때
-            self.get_logger().warn("관리자 모드이므로 주문을 접수할 수 없습니다.")
+            if self.robot_busy is True:
+                self.get_logger().warn("로봇이 다른 작업 중입니다.")
+            else:
+                self.get_logger().warn("관리자 모드이므로 주문을 접수할 수 없습니다.")
             response.success = False
             return response
     
@@ -94,6 +130,7 @@ class MainManagerNode(Node):
         if self.current_loop_index >= len(self.total_target_list):  # 모든 물품 처리를 완료했을 때
             self.get_logger().info("모든 물품을 장바구니에 담았습니다")
             self.trigger_move_robot(behavior_name="MOVE_HOME", next_step_callback=self.move_home_done)
+            self.robot_busy = False
             return
 
         current_target_name = self.total_target_list[self.current_loop_index]   # 현재 처리할 물품 이름
@@ -171,23 +208,65 @@ class MainManagerNode(Node):
             self.get_logger().error(f"로봇 {action_name} 요청 거부됨")
             return
 
-        # 수락되었다면 완료 결과에 콜백 연결
+        # 현재 실행 중인 핸들을 저장 (긴급 정지 시 취소하기 위함)
+        self.current_goal_handle = goal_handle
+
         goal_handle.get_result_async().add_done_callback(
             lambda f: self.action_result_handler(f, action_name, next_step_callback)
         )
     
     def action_result_handler(self, future, action_name, next_step_callback):
+        # 추가: 비상 모드라면 콜백을 그냥 무시하고 종료
+        if self.emergency_mode:
+            return
+
         action_result = future.result()
         
         if action_result.status == 4:
-            self.get_logger().info(f"🏁 '{action_name}' 동작 완료!")
+            self.get_logger().info(f"'{action_name}' 동작 완료!")
             
             if hasattr(action_result.result, 'qr_data') and action_result.result.qr_data:   # QR 데이터를 받아왔을 때
                 self.qr_data = action_result.result.qr_data
 
             next_step_callback()
         else:
-            self.get_logger().error(f"❌ '{action_name}' 동작 실패 (Status: {action_result.status})")
+            self.get_logger().error(f"'{action_name}' 동작 실패 (Status: {action_result.status})")
+            self.robot_busy = False
+
+    def emergency_stop_callback(self, msg):
+        self.get_logger().error("비상 정지! 모든 동작을 멈춥니다.")
+        
+        # 1. 비상 모드 활성화 (모든 로직 차단)
+        self.emergency_mode = True
+        self.robot_busy = True 
+
+        # 2. 로봇 즉시 정지 호출
+        self.request_motion_stop()
+
+        # 3. 현재 동작 취소
+        if self.current_goal_handle:
+            self.current_goal_handle.cancel_goal_async()
+            self.current_goal_handle = None
+
+        # 4. 루프 정리
+        self.total_target_list = []
+        self.current_loop_index = 0
+
+    def request_motion_stop(self):
+        for service_name, client in self.move_stop_clients:
+            if client.service_is_ready():
+                req = MoveStop.Request()
+                req.stop_mode = 0
+                client.call_async(req)
+                self.get_logger().error(
+                    f"{service_name} 즉시 정지 요청을 전송했습니다."
+                )
+                return
+
+        self.get_logger().error(
+            "move_stop 서비스가 준비되지 않아 즉시 정지 요청을 보내지 "
+            "못했습니다. (/motion, /dsr01/motion 모두 실패)"
+        )
 
 def main(args=None):
     rclpy.init(args=args)
