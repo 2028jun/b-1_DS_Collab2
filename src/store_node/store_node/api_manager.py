@@ -4,7 +4,7 @@ from datetime import datetime
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Empty, String
+from std_msgs.msg import Bool, String
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -22,7 +22,7 @@ class StoreRobotApiNode(Node):
 
         # 비상 정지 명령을 보낼 topic
         self.emergency_pub = self.create_publisher(
-            Empty,
+            Bool,
             "/emergency_stop",
             10
         )
@@ -42,7 +42,9 @@ class StoreRobotApiNode(Node):
         }
 
     def publish_emergency_stop(self):
-        self.emergency_pub.publish(Empty())
+        msg = Bool()
+        msg.data = True
+        self.emergency_pub.publish(msg)
 
         self.robot_state["status"] = "emergency_stopped"
         self.robot_state["last_command"] = "Emergency stop"

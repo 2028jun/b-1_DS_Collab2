@@ -86,17 +86,39 @@ class RoobotControlNode(Node):
         self.gripper.open_gripper()
         self.get_logger().info("robot_control_node 실행")
     
-    def safe_movel(self, pos, vel=VELOCITY, acc=ACC, mod=None, ref=None):
-        while self.is_paused:
-            time.sleep(0.5) # 손이 사라질 때까지 여기서 대기
+    def safe_movel(self, target_pos, vel=VELOCITY, acc=ACC, mod=0, ref=None):
+        # 1. 처음 이동은 절대 좌표(mod=0)로 수행
+        is_first_move = True
         
-        # 실제 두산 로봇 이동 명령 호출
-        if ref is not None:
-            movel(pos, vel=vel, acc=acc, mod=mod, ref=ref)
-        elif mod is not None:
-            movel(pos, vel=vel, acc=acc, mod=mod)
-        else:
-            movel(pos, vel=vel, acc=acc)
+        while True:
+            while self.is_paused:
+                time.sleep(0.5)
+            
+            current_pos = get_current_posx()[0]
+            if not self.is_not_reached(current_pos, target_pos):
+                break
+            
+            self.get_logger().info("이동 시작 또는 재개...")
+            
+            # 첫 이동은 ABS(절대), 정지 후 재개는 REL(상대)로 이동
+            if is_first_move:
+                movel(target_pos, vel=vel, acc=acc, mod=mod, ref=ref)
+                is_first_move = False
+            else:
+                # 1은 DR_MV_MOD_REL (상대 좌표 이동)
+                movel(target_pos, vel=vel, acc=acc, mod=1, ref=ref)
+    
+    def is_not_reached(self, current_pos, target_pos):
+        # target_pos는 posx 타입, current_pos는 list 타입일 수 있으므로 주의
+        # 1. target_pos가 posx 객체라면 리스트로 변환
+        target_coords = list(target_pos)[:3] # x, y, z
+        current_coords = list(current_pos)[:3]
+        
+        # 2. 거리 계산
+        dist = np.linalg.norm(np.array(target_coords) - np.array(current_coords))
+        
+        # 1.0mm (0.1cm) 이내라면 도달한 것으로 간주
+        return dist > 1.0 
 
     def safe_movej(self, pos, vel=VELOCITY, acc=ACC):
         while self.is_paused:
@@ -294,6 +316,11 @@ class RoobotControlNode(Node):
         # 실제 두산 API의 긴급 정지(MoveStop)를 여기에 호출하세요.
 
     def resume_callback(self, msg):
+        # 만약 이미 정지 상태가 아니라면(이미 재개된 상태라면) 그냥 무시
+        if not self.is_paused:
+            return 
+            
+        # 처음 한 번만 실행됨
         self.is_paused = False
         self.get_logger().info("로봇 제어부: 동작 재개!")
 

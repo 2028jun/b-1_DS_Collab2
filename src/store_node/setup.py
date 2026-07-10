@@ -1,4 +1,5 @@
 from setuptools import find_packages, setup
+from glob import glob
 import os
 
 package_name = 'store_node'
@@ -12,6 +13,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name, ['store_node/T_gripper2camera.npy']),
+        (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -29,7 +31,6 @@ setup(
             'main_manager = store_node.main_manager:main',
             'robot_control = store_node.robot_control:main',
             'database_manager = store_node.database_manager:main',
-            'db_ai_analytics_manager = store_node.db_ai_analytics_manager:main',
             'admin_auth_manager = store_node.admin_auth_manager:main',
             'api_server = store_node.main:main',
             'counter_qr_node = store_node.counter_qr_node:main',

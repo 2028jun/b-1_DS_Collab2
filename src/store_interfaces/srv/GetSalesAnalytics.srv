@@ -1,7 +1,0 @@
-string period          # today, week, month, all
-bool use_ai            # true이면 가능한 경우 AI 요약 생성
----
-bool success
-string report_json     # 집계 원본 JSON
-string summary         # 사람이 읽는 요약
-string error_message

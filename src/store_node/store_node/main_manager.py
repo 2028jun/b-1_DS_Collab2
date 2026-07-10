@@ -4,6 +4,7 @@ from rclpy.action import ActionClient
 from store_interfaces.srv import OrderProduct, UpdateInventory, AdminAuth
 from store_interfaces.action import RobotPickPlace
 from std_msgs.msg import String, Empty
+from time import time
 try:
     from dsr_msgs2.srv import MoveStop
     MOVE_STOP_IMPORT_ERROR = None
@@ -28,8 +29,8 @@ class MainManagerNode(Node):
         self.last_hand_detected_time = 0.0 # 손이 마지막으로 감지된 시간
         self.resume_timer = self.create_timer(1.0, self.check_resume_condition)
         self.pause_pub = self.create_publisher(Empty, '/robot_pause', 10)
-        self.resume_pub = self.create_publisher(Empty, '/robot_resume', 10) 
-
+        self.resume_pub = self.create_publisher(Empty, '/robot_resume', 10)
+        self.has_sent_resume = False
 
         # 현재 사용자 / 관리자 모드 퍼블리시
         self.auth_pub = self.create_publisher(String, '/store_state', 10)
@@ -285,13 +286,21 @@ class MainManagerNode(Node):
         )
     
     def check_resume_condition(self):
-        if self.emergency_mode and (time.time() - self.last_hand_detected_time > 3.0):
-            self.get_logger().info("손 사라짐. 로봇 동작 재개")
-            self.emergency_mode = False
-            self.robot_busy = False
-            
-            # 3. 로봇 제어부에 '재개' 신호 전달
-            self.resume_pub.publish(Empty())
+        # 비상 정지 상태일 때
+        if self.emergency_mode:
+            # 손이 치워진 지 3초가 지났다면
+            if (time.time() - self.last_hand_detected_time > 3.0):
+                if not self.has_sent_resume:
+                    self.get_logger().info("손 사라짐. 재개 신호 발행")
+                    self.resume_pub.publish(Empty())
+                    self.has_sent_resume = True # 딱 한 번만 발행
+                
+                # 상태 해제
+                self.emergency_mode = False
+                self.robot_busy = False
+        else:
+            # 비상 모드가 아니면 플래그 초기화
+            self.has_sent_resume = False
 
 def main(args=None):
     rclpy.init(args=args)
