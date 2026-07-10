@@ -10,6 +10,7 @@ from store_node.realsense import ImgNode
 from scipy.spatial.transform import Rotation
 from store_node.onrobot import RG
 from store_interfaces.action import RobotPickPlace
+from std_msgs.msg import String 
 
 import time
 import numpy as np
@@ -55,6 +56,8 @@ class RoobotControlNode(Node):
         # 2. 하드웨어 긴급 정지 서비스 (기존 서비스 클라이언트 활용)
         self.move_stop_client = self.create_client(MoveStop, '/dsr01/motion/move_stop')
 
+        self.qr_sub_robot = self.create_subscription(String, '/counter_qr_data_robot', self.qr_sub_robot_callback, 10)
+
         self.img_node = ImgNode()
         rclpy.spin_once(self.img_node)
         time.sleep(1)
@@ -68,6 +71,9 @@ class RoobotControlNode(Node):
         self.gripper = RG(GRIPPER_NAME, TOOLCHARGER_IP, TOOLCHARGER_PORT)
         
         self.is_processing = False  # 작업 중 중복 요청 방지용 플래그
+        self.object = None
+        self.last_qr_data = ""
+        self.qr_data = ""
         
         self.basket_up = posx([336, 427.5, 125.02, 46.75, -180, 140])
         self.basket_down = posx([336, 427.5, -150, 46.75, -180, 140])
@@ -79,7 +85,7 @@ class RoobotControlNode(Node):
         movej(self.home, vel=VELOCITY, acc=ACC) # 로봇 가동시 초기 자세로 이동
         self.gripper.open_gripper()
         self.get_logger().info("robot_control_node 실행")
-
+    
     def safe_movel(self, pos, vel=VELOCITY, acc=ACC, mod=None, ref=None):
         while self.is_paused:
             time.sleep(0.5) # 손이 사라질 때까지 여기서 대기
@@ -97,6 +103,9 @@ class RoobotControlNode(Node):
             time.sleep(0.5)
         movej(pos, vel=vel, acc=acc)
 
+    def qr_sub_robot_callback(self, msg):
+        self.qr_data = msg.data
+
     def trigger_scan_and_pick(self, object):
         if self.is_processing:
             return
@@ -109,6 +118,7 @@ class RoobotControlNode(Node):
         request = FineTuneQr.Request()
         request.start = True
         request.object = object
+        self.object = object
         
         self.get_logger().info("YOLO 비전 노드에 상품 3D 좌표 스캔 요청 전송...")       # 물품 스캔 요청
 
@@ -170,11 +180,13 @@ class RoobotControlNode(Node):
         
         self.get_logger().info("목표 상공 위치로 이동합니다.")
         self.gripper.open_gripper()
-        
         self.safe_movel(pick_pos1, vel=VELOCITY, acc=ACC)
         self.safe_movel(pick_pos2, vel=VELOCITY, acc=ACC)
 
-        pick_pos_front = posx(0, -70, 0, 0, 0, 0)
+        if self.object == "cup_noodle":
+            pick_pos_front = posx(0, -100, 0, 0, 0, 0)
+        else:
+            pick_pos_front = posx(0, -70, 0, 0, 0, 0)
         self.safe_movel(pick_pos_front, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
 
         self.gripper.close_gripper()
@@ -192,16 +204,11 @@ class RoobotControlNode(Node):
         self.get_logger().info("📸 QR 스캔 위치로 이동합니다.")
         self.safe_movel(self.qr_home, vel=VELOCITY, acc=ACC)
 
-        req = ScanCounterQr.Request()
-        req.start = True
-        
-        future = self.scan_qr.call_async(req)
-
         num = 0
 
-        while rclpy.ok() and not future.done():
+        while rclpy.ok() and (self.last_qr_data == self.qr_data):
             wait(3)
-            if future.done():
+            if self.last_qr_data != self.qr_data:
                 break
             if num == 0:
                 self.safe_movel([0, 60, 0, 0, 0, 0], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
@@ -211,29 +218,18 @@ class RoobotControlNode(Node):
                 num = 0
 
             wait(3)
-            if future.done():
+            if self.last_qr_data != self.qr_data:
                 break
             self.safe_movel([0, 0, 0, 0, 0, 179], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
             wait(3)
-            if future.done():
+            if self.last_qr_data != self.qr_data:
                 break
             self.safe_movel([0, 0, 0, 0, 0, -179], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
 
-        qr_data = None
-        try:
-            response = future.result()
-            if response and response.success: 
-                self.get_logger().info("QR 스캔 및 카운팅 성공!")
-                qr_data = response.qr_data 
-                result = True
-            else:
-                self.get_logger().warn("QR 인식 실패 또는 매칭되는 코드가 없습니다.")
-                result = False
-        except Exception as e:
-            self.get_logger().error(f"QR 스캔 서비스 통신 중 에러 발생: {e}")
-            result = False
+        self.last_qr_data = self.qr_data
+        result = True
 
-        return result, qr_data
+        return result, self.qr_data
 
     def execute_callback(self, goal_handle):
         result = RobotPickPlace.Result()
@@ -283,7 +279,6 @@ class RoobotControlNode(Node):
             result.success = True
             goal_handle.succeed()
             return result
-
 
         else:
             self.get_logger().warn("알 수 없는 명령입니다.")

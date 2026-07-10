@@ -1,12 +1,9 @@
-import time
-
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from store_interfaces.srv import OrderProduct, UpdateInventory, AdminAuth
 from store_interfaces.action import RobotPickPlace
-from std_msgs.msg import Empty
-
+from std_msgs.msg import String, Empty
 try:
     from dsr_msgs2.srv import MoveStop
     MOVE_STOP_IMPORT_ERROR = None
@@ -33,6 +30,17 @@ class MainManagerNode(Node):
         self.pause_pub = self.create_publisher(Empty, '/robot_pause', 10)
         self.resume_pub = self.create_publisher(Empty, '/robot_resume', 10) 
 
+
+        # 현재 사용자 / 관리자 모드 퍼블리시
+        self.auth_pub = self.create_publisher(String, '/store_state', 10)
+
+        # 퍼블리시 타이머
+        self.publish_cooldown = 0.5  
+        self.auth_timer = self.create_timer(
+            self.publish_cooldown, 
+            self.publish_auth_mode_callback
+        )
+        # ---------------------------------------------------------------------------------------------------------
         # 서비스 서버
         self.srv_kiosk = self.create_service(     # 주문 접수
             OrderProduct, 
@@ -55,7 +63,6 @@ class MainManagerNode(Node):
         self.robot_action_client = ActionClient(self, RobotPickPlace, '/pickup_and_place')  # 로봇의 동작 요청
 
         self.get_logger().info("메인 매니저 노드 시작")
-
     def create_move_stop_clients(self):
         if MoveStop is None:
             self.get_logger().warn(
@@ -70,6 +77,12 @@ class MainManagerNode(Node):
                 self.create_client(MoveStop, '/dsr01/motion/move_stop'),
             ),
         ]
+    
+    def publish_auth_mode_callback(self):
+        """타이머 주기에 맞춰 현재 시스템 모드를 상시 퍼블리시합니다."""
+        msg = String()
+        msg.data = f'{self.system_mode}, {self.robot_busy}'
+        self.auth_pub.publish(msg)
     
     def AdminAuth_callback(self, request, response):    # 음성 비밀번호 일치 및 키 카드 인식 성공(다른 노드에서 진행) 후 모드 변경
         if request.requested_mode == "ADMIN":
@@ -95,12 +108,11 @@ class MainManagerNode(Node):
         
         return response
         
-    def order_product_callback(self, request, response):
+    def order_product_callback(self, request, response):    # 키오스크 화면 및 음성 주문 접수시 실행
         if self.emergency_mode:
             self.get_logger().warn("비상 정지 상태입니다. 주문을 접수할 수 없습니다.")
             response.success = False
             return response
-            # 키오스크 화면 및 음성 주문 접수시 실행
         if self.system_mode == "SERVICE" and not self.robot_busy :       # 주문 모드일 때
             self.order_items_list = request.product_name  # 주문 상품 목록 저장
             self.order_quantities_list = request.quantity  # 주문 수량 목록 저장
@@ -118,6 +130,8 @@ class MainManagerNode(Node):
                 self.get_logger().error('주문 서버가 응답하지 않습니다.')
                 response.success = False
                 return response
+
+            self.robot_busy = True
             
             self.process_next_item_loop()  # 주문 처리 루프 시작
 
@@ -133,6 +147,7 @@ class MainManagerNode(Node):
             return response
     
     def process_next_item_loop(self):   # 주문 처리 루프 : 스캔지점 이동 -> 물품 스캔 -> 물품 옮기기 -> QR 스캔 -> 장바구니 놓기 -> 재고 업데이트
+        self.qr_data = None
         if self.current_loop_index >= len(self.total_target_list):  # 모든 물품 처리를 완료했을 때
             self.get_logger().info("모든 물품을 장바구니에 담았습니다")
             self.trigger_move_robot(behavior_name="MOVE_HOME", next_step_callback=self.move_home_done)
@@ -194,6 +209,7 @@ class MainManagerNode(Node):
 
     def move_home_done(self):
         self.get_logger().info(f"초기 위치 이동 완료")
+        self.robot_busy = False
 
     def trigger_move_robot(self, behavior_name, next_step_callback, object_name=""):
         goal_msg = RobotPickPlace.Goal()
@@ -226,7 +242,7 @@ class MainManagerNode(Node):
         # 추가: 비상 모드라면 콜백을 그냥 무시하고 종료
         if self.emergency_mode:
             return
-
+        
         action_result = future.result()
         
         if action_result.status == 4:
@@ -239,7 +255,7 @@ class MainManagerNode(Node):
         else:
             self.get_logger().error(f"'{action_name}' 동작 실패 (Status: {action_result.status})")
             self.robot_busy = False
-
+            
     def emergency_stop_callback(self, msg):
         self.last_hand_detected_time = time.time()
         if not self.emergency_mode:
