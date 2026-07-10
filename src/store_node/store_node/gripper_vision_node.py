@@ -228,6 +228,8 @@ class GripperVisionNode(Node):
         if not self.show_realsense or self.rs_color_frame is None:
             return
 
+        self.update_detections_for_display()
+        
         frame = self.rs_color_frame.copy()
         for det in self.latest_detections:
             x1, y1, x2, y2 = det['box']
