@@ -1,3 +1,5 @@
+import time
+
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
@@ -26,6 +28,10 @@ class MainManagerNode(Node):
         self.create_subscription(Empty, '/emergency_stop', self.emergency_stop_callback, 1)
         self.move_stop_clients = self.create_move_stop_clients()
         self.emergency_mode = False
+        self.last_hand_detected_time = 0.0 # 손이 마지막으로 감지된 시간
+        self.resume_timer = self.create_timer(1.0, self.check_resume_condition)
+        self.pause_pub = self.create_publisher(Empty, '/robot_pause', 10)
+        self.resume_pub = self.create_publisher(Empty, '/robot_resume', 10) 
 
         # 서비스 서버
         self.srv_kiosk = self.create_service(     # 주문 접수
@@ -202,7 +208,8 @@ class MainManagerNode(Node):
             lambda f: self.action_response_handler(f, behavior_name, next_step_callback)
         )
 
-    def action_response_handler(self, future, action_name, next_step_callback):   # 로봇 동작 완료 후 다음 단계로 넘어가기 위한 처리
+    def action_response_handler(self, future, action_name, next_step_callback):   
+        # 로봇 동작 완료 후 다음 단계로 넘어가기 위한 처리
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().error(f"로봇 {action_name} 요청 거부됨")
@@ -234,23 +241,16 @@ class MainManagerNode(Node):
             self.robot_busy = False
 
     def emergency_stop_callback(self, msg):
-        self.get_logger().error("비상 정지! 모든 동작을 멈춥니다.")
-        
-        # 1. 비상 모드 활성화 (모든 로직 차단)
-        self.emergency_mode = True
-        self.robot_busy = True 
-
-        # 2. 로봇 즉시 정지 호출
-        self.request_motion_stop()
-
-        # 3. 현재 동작 취소
-        if self.current_goal_handle:
-            self.current_goal_handle.cancel_goal_async()
-            self.current_goal_handle = None
-
-        # 4. 루프 정리
-        self.total_target_list = []
-        self.current_loop_index = 0
+        self.last_hand_detected_time = time.time()
+        if not self.emergency_mode:
+            self.get_logger().warn("손 감지! 로봇 동작 일시 정지")
+            self.emergency_mode = True
+            
+            # 1. 물리적 긴급 정지 (즉시 모터 멈춤)
+            self.request_motion_stop()
+            
+            # 2. 로봇 제어부에 '일시 정지' 신호 전달 (로봇이 상태를 기억하게 함)
+            self.pause_pub.publish(Empty())
 
     def request_motion_stop(self):
         for service_name, client in self.move_stop_clients:
@@ -267,6 +267,15 @@ class MainManagerNode(Node):
             "move_stop 서비스가 준비되지 않아 즉시 정지 요청을 보내지 "
             "못했습니다. (/motion, /dsr01/motion 모두 실패)"
         )
+    
+    def check_resume_condition(self):
+        if self.emergency_mode and (time.time() - self.last_hand_detected_time > 3.0):
+            self.get_logger().info("손 사라짐. 로봇 동작 재개")
+            self.emergency_mode = False
+            self.robot_busy = False
+            
+            # 3. 로봇 제어부에 '재개' 신호 전달
+            self.resume_pub.publish(Empty())
 
 def main(args=None):
     rclpy.init(args=args)

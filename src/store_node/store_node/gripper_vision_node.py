@@ -372,16 +372,12 @@ class GripperVisionNode(Node):
         return max(product_detections, key=lambda det: det['score'])
 
     def publish_emergency_stop(self, class_name, score):
-        now = time.time()
-        if (now - self.last_emergency_stop_time) < self.emergency_stop_cooldown:
-            return
-
-        self.last_emergency_stop_time = now
         self.emergency_stop_pub.publish(Empty())
-        self.get_logger().error(
-            f'Human hand detected: {class_name} score={score:.2f}. '
-            'Published /emergency_stop.'
-        )
+        
+        now = time.time()
+        if (now - self.last_emergency_stop_time) > 2.0:
+            self.last_emergency_stop_time = now
+            self.get_logger().warn(f'Human hand detected: {class_name} score={score:.2f}')
 
     def pixel_to_camera_point(self, x, y):
         """픽셀 좌표와 depth를 카메라 기준 3D 좌표로 변환합니다."""

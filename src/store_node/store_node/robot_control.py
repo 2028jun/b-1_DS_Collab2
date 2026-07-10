@@ -1,4 +1,6 @@
 import os
+from dsr_msgs2.srv import MoveStop
+from std_msgs.msg import Empty
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
@@ -44,6 +46,15 @@ class RoobotControlNode(Node):
             'scan_counter_qr',
         )
 
+        self.is_paused = False # 비상 정지 상태 플래그
+        
+        # 1. 일시 정지/재개 신호 구독
+        self.create_subscription(Empty, '/robot_pause', self.pause_callback, 10)
+        self.create_subscription(Empty, '/robot_resume', self.resume_callback, 10)
+        
+        # 2. 하드웨어 긴급 정지 서비스 (기존 서비스 클라이언트 활용)
+        self.move_stop_client = self.create_client(MoveStop, '/dsr01/motion/move_stop')
+
         self.img_node = ImgNode()
         rclpy.spin_once(self.img_node)
         time.sleep(1)
@@ -68,6 +79,23 @@ class RoobotControlNode(Node):
         movej(self.home, vel=VELOCITY, acc=ACC) # 로봇 가동시 초기 자세로 이동
         self.gripper.open_gripper()
         self.get_logger().info("robot_control_node 실행")
+
+    def safe_movel(self, pos, vel=VELOCITY, acc=ACC, mod=None, ref=None):
+        while self.is_paused:
+            time.sleep(0.5) # 손이 사라질 때까지 여기서 대기
+        
+        # 실제 두산 로봇 이동 명령 호출
+        if ref is not None:
+            movel(pos, vel=vel, acc=acc, mod=mod, ref=ref)
+        elif mod is not None:
+            movel(pos, vel=vel, acc=acc, mod=mod)
+        else:
+            movel(pos, vel=vel, acc=acc)
+
+    def safe_movej(self, pos, vel=VELOCITY, acc=ACC):
+        while self.is_paused:
+            time.sleep(0.5)
+        movej(pos, vel=vel, acc=acc)
 
     def trigger_scan_and_pick(self, object):
         if self.is_processing:
@@ -142,26 +170,27 @@ class RoobotControlNode(Node):
         
         self.get_logger().info("목표 상공 위치로 이동합니다.")
         self.gripper.open_gripper()
-        movel(pick_pos1, vel=VELOCITY, acc=ACC)
-        movel(pick_pos2, vel=VELOCITY, acc=ACC)
+        
+        self.safe_movel(pick_pos1, vel=VELOCITY, acc=ACC)
+        self.safe_movel(pick_pos2, vel=VELOCITY, acc=ACC)
 
         pick_pos_front = posx(0, -70, 0, 0, 0, 0)
-        movel(pick_pos_front, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
+        self.safe_movel(pick_pos_front, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
 
         self.gripper.close_gripper()
         wait(2)
 
         pick_pos_up = posx(0, 0, 20, 0, 0, 0)
-        movel(pick_pos_up, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
+        self.safe_movel(pick_pos_up, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
 
         pick_pos_back = posx(0, 200, 0, 0, 0, 0)
-        movel(pick_pos_back, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
+        self.safe_movel(pick_pos_back, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
 
-        movel(self.scan_home, vel=VELOCITY, acc=ACC)
+        self.safe_movel(self.scan_home, vel=VELOCITY, acc=ACC)
 
     def trigger_qr_scan(self):
         self.get_logger().info("📸 QR 스캔 위치로 이동합니다.")
-        movel(self.qr_home, vel=VELOCITY, acc=ACC) 
+        self.safe_movel(self.qr_home, vel=VELOCITY, acc=ACC)
 
         req = ScanCounterQr.Request()
         req.start = True
@@ -175,20 +204,20 @@ class RoobotControlNode(Node):
             if future.done():
                 break
             if num == 0:
-                movel([0, 60, 0, 0, 0, 0], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
+                self.safe_movel([0, 60, 0, 0, 0, 0], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
                 num = 1
             else:
-                movel([0, -60, 0, 0, 0, 0], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
+                self.safe_movel([0, -60, 0, 0, 0, 0], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
                 num = 0
 
             wait(3)
             if future.done():
                 break
-            movel([0, 0, 0, 0, 0, 179], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
+            self.safe_movel([0, 0, 0, 0, 0, 179], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
             wait(3)
             if future.done():
                 break
-            movel([0, 0, 0, 0, 0, -179], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
+            self.safe_movel([0, 0, 0, 0, 0, -179], vel=VELOCITY, acc=ACC, ref=DR_TOOL)
 
         qr_data = None
         try:
@@ -213,14 +242,14 @@ class RoobotControlNode(Node):
         object = goal_handle.request.object_name      
 
         if behavior == "MOVE_HOME":     # 초기 위치 이동 요청받을 때
-            movej(self.home, vel=VELOCITY, acc=ACC)
+            self.safe_movej(self.home, vel=VELOCITY, acc=ACC)
             result.success = True
             goal_handle.succeed()
             return result
         
         elif behavior == "MOVE_SCAN":   # 물품 스캔 지점 이동 요청 받을 때
-            movej(self.scan_home_waypoint, vel=VELOCITY, acc=ACC)
-            movel(self.scan_home, vel=VELOCITY, acc=ACC)
+            self.safe_movej(self.scan_home_waypoint, vel=VELOCITY, acc=ACC)
+            self.safe_movel(self.scan_home, vel=VELOCITY, acc=ACC)
             result.success = True
             goal_handle.succeed()
             return result
@@ -247,10 +276,10 @@ class RoobotControlNode(Node):
             return result
         
         elif behavior == "PLACE_BASKET":
-            movel(self.basket_up, vel=VELOCITY, acc=ACC)
-            movel(self.basket_down, vel=VELOCITY, acc=ACC)
+            self.safe_movel(self.basket_up, vel=VELOCITY, acc=ACC)
+            self.safe_movel(self.basket_down, vel=VELOCITY, acc=ACC)
             self.gripper.open_gripper()
-            movel(self.basket_up, vel=VELOCITY, acc=ACC)
+            self.safe_movel(self.basket_up, vel=VELOCITY, acc=ACC)
             result.success = True
             goal_handle.succeed()
             return result
@@ -261,6 +290,17 @@ class RoobotControlNode(Node):
             result.success = False
             goal_handle.abort()
             return result 
+        
+    def pause_callback(self, msg):
+        self.is_paused = True
+        self.get_logger().error("로봇 제어부: 일시 정지 명령 수신!")
+        # 두산 로봇 즉시 정지 API 호출 (필요 시)
+        # 로봇이 현재 이동 중이라면 강제 정지가 필요합니다.
+        # 실제 두산 API의 긴급 정지(MoveStop)를 여기에 호출하세요.
+
+    def resume_callback(self, msg):
+        self.is_paused = False
+        self.get_logger().info("로봇 제어부: 동작 재개!")
 
 def main(args=None):
     """프로그램 실행의 핵심 진입점이 되는 메인 함수"""
