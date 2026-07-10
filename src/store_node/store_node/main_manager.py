@@ -4,7 +4,7 @@ from rclpy.action import ActionClient
 from store_interfaces.srv import OrderProduct, UpdateInventory, AdminAuth
 from store_interfaces.action import RobotPickPlace
 from std_msgs.msg import String, Empty
-from time import time
+import time
 try:
     from dsr_msgs2.srv import MoveStop
     MOVE_STOP_IMPORT_ERROR = None
@@ -240,22 +240,31 @@ class MainManagerNode(Node):
         )
     
     def action_result_handler(self, future, action_name, next_step_callback):
-        # 추가: 비상 모드라면 콜백을 그냥 무시하고 종료
+        # 1. 비상 정지 중이면 콜백을 아예 처리하지 않고 종료 (재개 시 자동으로 다시 처리됨)
         if self.emergency_mode:
             return
         
-        action_result = future.result()
-        
+        try:
+            action_result = future.result()
+        except Exception as e:
+            self.get_logger().error(f"결과 수신 오류: {e}")
+            return
+
+        # 2. 성공한 경우
         if action_result.status == 4:
             self.get_logger().info(f"'{action_name}' 동작 완료!")
-            
-            if hasattr(action_result.result, 'qr_data') and action_result.result.qr_data:   # QR 데이터를 받아왔을 때
+            if hasattr(action_result.result, 'qr_data') and action_result.result.qr_data:
                 self.qr_data = action_result.result.qr_data
-
             next_step_callback()
+
+        # 3. 비상 정지로 인해 취소된 경우
+        elif action_result.status == 2:
+            self.get_logger().warn(f"'{action_name}' 동작이 비상 정지로 인해 취소되었습니다.")
+
+        # 4. 진짜 실패인 경우
         else:
             self.get_logger().error(f"'{action_name}' 동작 실패 (Status: {action_result.status})")
-            self.robot_busy = False
+            self.robot_busy = False 
             
     def emergency_stop_callback(self, msg):
         self.last_hand_detected_time = time.time()
@@ -286,21 +295,19 @@ class MainManagerNode(Node):
         )
     
     def check_resume_condition(self):
-        # 비상 정지 상태일 때
         if self.emergency_mode:
-            # 손이 치워진 지 3초가 지났다면
             if (time.time() - self.last_hand_detected_time > 3.0):
-                if not self.has_sent_resume:
-                    self.get_logger().info("손 사라짐. 재개 신호 발행")
-                    self.resume_pub.publish(Empty())
-                    self.has_sent_resume = True # 딱 한 번만 발행
+                self.get_logger().info("비상 정지 해제: 작업 재개 시도...")
                 
-                # 상태 해제
+                # 1. 로봇 제어부 재개 신호
+                self.resume_pub.publish(Empty())
+                
+                # 2. 비상 모드 해제
                 self.emergency_mode = False
-                self.robot_busy = False
-        else:
-            # 비상 모드가 아니면 플래그 초기화
-            self.has_sent_resume = False
+                self.has_sent_resume = False 
+
+                # 3. [중요] 재개 확인 로그
+                self.get_logger().info("로봇이 동작을 재개합니다. 대기 상태를 유지합니다.")
 
 def main(args=None):
     rclpy.init(args=args)
