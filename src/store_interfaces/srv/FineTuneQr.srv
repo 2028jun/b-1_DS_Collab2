@@ -2,5 +2,5 @@ bool start                    # QR 정밀 스캔 시작 요청
 string object                 # 인식할 물품
 ---
 geometry_msgs/Point offset    # 카메라 기준 QR 보정 좌표(x, y, z)
-bool found  
-string detected_name
+bool found                    # 물품을 찾았는지 여부
+string detected_name          # 스캔한 물품

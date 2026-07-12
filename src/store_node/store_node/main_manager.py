@@ -21,26 +21,22 @@ class MainManagerNode(Node):
         self.total_target_list = [] # 처리해야할 남은 물품
         self.system_mode = "SERVICE"  # 주문 모드
         self.qr_data = None # QR 데이터
-        self.robot_busy = False
-        self.current_goal_handle = None
-        self.create_subscription(Empty, '/emergency_stop', self.emergency_stop_callback, 1)
-        self.move_stop_clients = self.create_move_stop_clients()
-        self.emergency_mode = False
+        self.robot_busy = False     # 로봇 동작 여부
+        self.emergency_mode = False     # 비상 정지 상황
         self.last_hand_detected_time = 0.0 # 손이 마지막으로 감지된 시간
-        self.resume_timer = self.create_timer(1.0, self.check_resume_condition)
-        self.pause_pub = self.create_publisher(Empty, '/robot_pause', 10)
-        self.resume_pub = self.create_publisher(Empty, '/robot_resume', 10)
-        self.has_sent_resume = False
+        self.has_sent_resume = False    # 재개 상황
 
-        # 현재 사용자 / 관리자 모드 퍼블리시
-        self.auth_pub = self.create_publisher(String, '/store_state', 10)
+        # 퍼블리셔
+        self.auth_pub = self.create_publisher(String, '/store_state', 10)       # 현재 사용자 / 관리자 모드 퍼블리시
+        self.pause_pub = self.create_publisher(Empty, '/robot_pause', 10)       # 정지 신호
+        self.resume_pub = self.create_publisher(Empty, '/robot_resume', 10)     # 재개 신호
 
-        # 퍼블리시 타이머
-        self.publish_cooldown = 0.5  
-        self.auth_timer = self.create_timer(
-            self.publish_cooldown, 
-            self.publish_auth_mode_callback
-        )
+        # 퍼블리시 타이머 
+        self.auth_timer = self.create_timer(0.5, self.publish_auth_mode_callback)    # 현재 사용자 / 관리자 정보 0.5초마다 퍼블리시
+        self.resume_timer = self.create_timer(1.0, self.check_resume_condition)      # 1초마다 비상정지 상태일 때 재개 가능 상황인지 판단
+        # ---------------------------------------------------------------------------------------------------------
+        # 서브스크라이버
+        self.create_subscription(Empty, '/emergency_stop', self.emergency_stop_callback, 1)     # 긴급 정지 메시지
         # ---------------------------------------------------------------------------------------------------------
         # 서비스 서버
         self.srv_kiosk = self.create_service(     # 주문 접수
@@ -59,30 +55,18 @@ class MainManagerNode(Node):
             UpdateInventory, 
             '/update_stock', 
         )
+
+        self.stop_client = self.create_client(MoveStop, '/dsr01/motion/move_stop')  # 긴급 정지 요청
         # -----------------------------------------------------------------------------------------------------
         # 액션 클라이언트
         self.robot_action_client = ActionClient(self, RobotPickPlace, '/pickup_and_place')  # 로봇의 동작 요청
+        # -----------------------------------------------------------------------------------------------------
 
         self.get_logger().info("메인 매니저 노드 시작")
-    def create_move_stop_clients(self):
-        if MoveStop is None:
-            self.get_logger().warn(
-                f"MoveStop 서비스를 사용할 수 없습니다: {MOVE_STOP_IMPORT_ERROR}"
-            )
-            return []
-
-        return [
-            ('/motion/move_stop', self.create_client(MoveStop, '/motion/move_stop')),
-            (
-                '/dsr01/motion/move_stop',
-                self.create_client(MoveStop, '/dsr01/motion/move_stop'),
-            ),
-        ]
     
-    def publish_auth_mode_callback(self):
-        """타이머 주기에 맞춰 현재 시스템 모드를 상시 퍼블리시합니다."""
+    def publish_auth_mode_callback(self):           # 서비스 / 관리자 모드, 로봇의 동작 여부를 1초마다 전송
         msg = String()
-        msg.data = f'{self.system_mode}, {self.robot_busy}'
+        msg.data = f'{self.system_mode}, {self.robot_busy}'     
         self.auth_pub.publish(msg)
     
     def AdminAuth_callback(self, request, response):    # 음성 비밀번호 일치 및 키 카드 인식 성공(다른 노드에서 진행) 후 모드 변경
@@ -110,11 +94,12 @@ class MainManagerNode(Node):
         return response
         
     def order_product_callback(self, request, response):    # 키오스크 화면 및 음성 주문 접수시 실행
-        if self.emergency_mode:
+        if self.emergency_mode:         # 비상 정지 상태에서는 주문 접수 X
             self.get_logger().warn("비상 정지 상태입니다. 주문을 접수할 수 없습니다.")
             response.success = False
             return response
-        if self.system_mode == "SERVICE" and not self.robot_busy :       # 주문 모드일 때
+        
+        if self.system_mode == "SERVICE" and not self.robot_busy :       # 서비스 모드, 로봇이 동작하지 않을 때
             self.order_items_list = request.product_name  # 주문 상품 목록 저장
             self.order_quantities_list = request.quantity  # 주문 수량 목록 저장
             self.current_loop_index = 0     # 주문 처리 인덱스 초기화
@@ -132,17 +117,17 @@ class MainManagerNode(Node):
                 response.success = False
                 return response
 
-            self.robot_busy = True
+            self.robot_busy = True      # 주문을 접수했으므로 로봇 동작 활성화
             
             self.process_next_item_loop()  # 주문 처리 루프 시작
 
             response.success = True     # 주문 접수 완료 
 
             return response
-        else:           # 관리자 모드일 때
-            if self.robot_busy is True:
+        else:           
+            if self.robot_busy is True:     # 로봇이 이미 동작 중일 때
                 self.get_logger().warn("로봇이 다른 작업 중입니다.")
-            else:
+            else:                           # 관리자 모드 일 때
                 self.get_logger().warn("관리자 모드이므로 주문을 접수할 수 없습니다.")
             response.success = False
             return response
@@ -151,18 +136,17 @@ class MainManagerNode(Node):
         self.qr_data = None
         if self.current_loop_index >= len(self.total_target_list):  # 모든 물품 처리를 완료했을 때
             self.get_logger().info("모든 물품을 장바구니에 담았습니다")
-            self.trigger_move_robot(behavior_name="MOVE_HOME", next_step_callback=self.move_home_done)
-            self.robot_busy = False
+            self.trigger_move_robot(behavior_name="MOVE_HOME", next_step_callback=self.move_home_done)      # 초기 위치 이동
             return
 
         current_target_name = self.total_target_list[self.current_loop_index]   # 현재 처리할 물품 이름
         self.get_logger().info(f"[{self.current_loop_index + 1}/{len(self.total_target_list)}] '{current_target_name}' 처리 시작...")
         
-        # 스캔 지점 이동
+        # 전체 물품 스캔 지점 이동
         self.trigger_move_robot(behavior_name="MOVE_SCAN", 
                                 next_step_callback=lambda: self.trigger_pick_object(self.total_target_list[self.current_loop_index])) 
 
-    def trigger_pick_object(self, object_name):     # 로봇 물품 잡기 요청
+    def trigger_pick_object(self, object_name):     # 처리할 물품 스캔하고 잡기 요청
         self.trigger_move_robot(behavior_name="SCAN_AND_PICK", next_step_callback=self.trigger_scan_qr, object_name=object_name)
     
     def trigger_scan_qr(self):      # QR 스캔 요청
@@ -172,15 +156,15 @@ class MainManagerNode(Node):
         self.trigger_move_robot(behavior_name="PLACE_BASKET", next_step_callback=self.trigger_update_inventory)
 
     def trigger_update_inventory(self):    # 재고 업데이트 요청
-        if not self.srv_database.wait_for_service(timeout_sec=3.0):
+        if not self.srv_database.wait_for_service(timeout_sec=3.0):     # 재고 업데이트 서비스 서버 확인
             self.get_logger().error("재고 업데이트 서버가 켜져있지 않습니다.")
             return
 
         self.get_logger().info("재고 업데이트 요청 중...")
         request = UpdateInventory.Request()
-        request.qr_data = self.qr_data
+        request.qr_data = self.qr_data  # 업데이트할 QR 데이터
         
-        update_future = self.srv_database.call_async(request)
+        update_future = self.srv_database.call_async(request)       # 재고 업데이트 요청
         update_future.add_done_callback(self.update_inventory_callback)
     
     def update_inventory_callback(self, future):    # 재고 업데이트 결과
@@ -201,24 +185,24 @@ class MainManagerNode(Node):
         self.current_loop_index += 1  # 다음 물품 처리 인덱스로 이동
         self.process_next_item_loop()  # 다음 물품 처리 루프 시작
 
-    def trigger_move_to_home(self):
+    def trigger_move_to_home(self):     # 초기 위치로 이동요청
         self.trigger_move_robot(behavior_name="MOVE_HOME", next_step_callback=self.move_home_done)
 
     def move_home_done(self):
         self.get_logger().info(f"초기 위치 이동 완료")
-        self.robot_busy = False
+        self.robot_busy = False     # 동작 완료했으므로 로봇 동작 X
 
-    def trigger_move_robot(self, behavior_name, next_step_callback, object_name=""):
+    def trigger_move_robot(self, behavior_name, next_step_callback, object_name=""):    # 로봇에게 동작 요청
         goal_msg = RobotPickPlace.Goal()
-        goal_msg.behavior_name = behavior_name
-        goal_msg.object_name = object_name
+        goal_msg.behavior_name = behavior_name     # 로봇이 실행할 동작 
+        goal_msg.object_name = object_name         # 현재 처리할 물품
         
         self.get_logger().info(f"'{behavior_name}' 동작 실행...")
         
-        future = self.robot_action_client.send_goal_async(goal_msg)
+        future = self.robot_action_client.send_goal_async(goal_msg)     # 동작 요청 보내기
         
         future.add_done_callback(
-            lambda f: self.action_response_handler(f, behavior_name, next_step_callback)
+            lambda f: self.action_response_handler(f, behavior_name, next_step_callback)        # 동작 요청 결과
         )
 
     def action_response_handler(self, future, action_name, next_step_callback):   # 로봇 동작 완료 후 다음 단계로 넘어가기 위한 처리
@@ -227,17 +211,7 @@ class MainManagerNode(Node):
             self.get_logger().error(f"로봇 {action_name} 요청 거부됨")
             return
 
-        # 수락되었다면 완료 결과에 콜백 연결def action_response_handler(self, future, action_name, next_step_callback):   
-        # 로봇 동작 완료 후 다음 단계로 넘어가기 위한 처리
-        goal_handle = future.result()
-        if not goal_handle.accepted:
-            self.get_logger().error(f"로봇 {action_name} 요청 거부됨")
-            return
-
-        # 현재 실행 중인 핸들을 저장 (긴급 정지 시 취소하기 위함)
-        self.current_goal_handle = goal_handle
-
-        goal_handle.get_result_async().add_done_callback(
+        goal_handle.get_result_async().add_done_callback(           # 동작 완료 시 다음 동작 처리
             lambda f: self.action_result_handler(f, action_name, next_step_callback)
         )
     
@@ -252,12 +226,12 @@ class MainManagerNode(Node):
             self.get_logger().error(f"결과 수신 오류: {e}")
             return
 
-        # 2. 성공한 경우
+        # 2. 동작을 성공한 경우
         if action_result.status == 4:
             self.get_logger().info(f"'{action_name}' 동작 완료!")
-            if hasattr(action_result.result, 'qr_data') and action_result.result.qr_data:
-                self.qr_data = action_result.result.qr_data
-            next_step_callback()
+            if hasattr(action_result.result, 'qr_data') and action_result.result.qr_data:   # 동작 완료 후 결과 값에 qr_data가 있으면(QR 데이터르 전송 받은 경우) 
+                self.qr_data = action_result.result.qr_data     # qr_data 변수에 저장
+            next_step_callback()       # 다음 동작을 실행
 
         # 3. 비상 정지로 인해 취소된 경우
         elif action_result.status == 2:
@@ -269,7 +243,7 @@ class MainManagerNode(Node):
             self.robot_busy = False # 실제 오류일 때만 작업을 종료시킴
             
     def emergency_stop_callback(self, msg):
-        self.last_hand_detected_time = time.time()
+        self.last_hand_detected_time = time.time()      # 손 감지 시 타이머 시작
         if not self.emergency_mode:
             self.get_logger().warn("손 감지! 로봇 동작 일시 정지")
             self.emergency_mode = True
@@ -281,36 +255,31 @@ class MainManagerNode(Node):
             self.pause_pub.publish(Empty())
 
     def request_motion_stop(self):
-        for service_name, client in self.move_stop_clients:
-            if client.service_is_ready():
-                req = MoveStop.Request()
-                req.stop_mode = 0
-                client.call_async(req)
-                self.get_logger().error(
-                    f"{service_name} 즉시 정지 요청을 전송했습니다."
-                )
-                return
-
-        self.get_logger().error(
-            "move_stop 서비스가 준비되지 않아 즉시 정지 요청을 보내지 "
-            "못했습니다. (/motion, /dsr01/motion 모두 실패)"
-        )
+        if MoveStop is None:
+            self.get_logger().warn(f"MoveStop 서비스를 사용할 수 없습니다: {MOVE_STOP_IMPORT_ERROR}")
+            return
+        
+        req = MoveStop.Request()
+        req.stop_mode = 0
+        self.stop_client.call_async(req)      # 정지 요청
+        self.get_logger().error(f" 즉시 정지 요청을 전송했습니다.")
+        return
     
     def check_resume_condition(self):
-        if self.emergency_mode:
-            if (time.time() - self.last_hand_detected_time > 3.0):
+        if self.emergency_mode:                 # 비상정지 상황일 때
+            if (time.time() - self.last_hand_detected_time > 3.0):      # 손 감지가 3초 이상 안될 경우
                 self.get_logger().info("비상 정지 해제: 작업 재개...")
                 
                 # 1. 로봇 제어부 재개 신호
                 if not self.has_sent_resume:
-                    self.resume_pub.publish(Empty())
-                    self.has_sent_resume = True
+                    self.resume_pub.publish(Empty())        # 재개 신호 전송
+                    self.has_sent_resume = True         # 재개 시작
                 
                 # 2. 비상 모드 해제
-                self.emergency_mode = False
+                self.emergency_mode = False   
                 
-        else:
-            self.has_sent_resume = False
+        else:       # 비상 정지 상황이 아닐 때
+            self.has_sent_resume = False        # 재개 변수 False로 초기화
 
 def main(args=None):
     rclpy.init(args=args)

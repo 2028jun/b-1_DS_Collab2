@@ -71,36 +71,6 @@ class GripperVisionNode(Node):
         self.last_detect_time = 0.0
         self.last_emergency_stop_time = 0.0
 
-        self.hand_classes_text = self.declare_parameter(
-            'hand_classes',
-            'hand',
-        ).value
-        self.hand_classes = {
-            class_name.strip().lower()
-            for class_name in self.hand_classes_text.split(',')
-            if class_name.strip()
-        }
-        self.hand_conf_threshold = self.declare_parameter(
-            'hand_conf_threshold',
-            0.5,
-        ).value
-        self.emergency_stop_cooldown = self.declare_parameter(
-            'emergency_stop_cooldown',
-            1.0,
-        ).value
-
-        self.target_class = self.declare_parameter('target_class', '').value
-        # 그리퍼 인식 X
-        self.ignore_classes_text = self.declare_parameter(
-            'ignore_classes',
-            'gripper, robot',
-        ).value
-        self.ignore_classes = {
-            class_name.strip()
-            for class_name in self.ignore_classes_text.split(',')
-            if class_name.strip()
-        }
-
         # CameraInfo에서 받은 내부 파라미터, 픽셀 좌표를 3D 좌표로 바꿀 때 사용
         self.fx = 0.0
         self.fy = 0.0
@@ -111,12 +81,6 @@ class GripperVisionNode(Node):
         self.rs_depth_frame = None
         self.latest_detections = []
         self.realsense_window_name = 'RealSense Gripper View'
-
-        self.emergency_stop_pub = self.create_publisher(
-            Empty,
-            '/emergency_stop',
-            10,
-        )
 
         self.model = self.load_yolo_model(self.model_path)
 
@@ -145,38 +109,51 @@ class GripperVisionNode(Node):
             10,
         )
 
-        self.create_service(
-            FineTuneQr,
-            'fine_tune_qr',
-            self.handle_fine_tune_qr,
-        )
-
-        self.scan_key_card = self.create_publisher(Bool, 'key_card', 10)
-
-        self.detection_timer = self.create_timer(
-            self.detect_interval,
-            self.update_detections_for_display,
-        )
-
         self.realsense_status_timer = None
         if self.show_realsense_status:
             self.realsense_status_timer = self.create_timer(
                 2.0,
                 self.log_realsense_status,
             )
+        
+        self.detection_timer = self.create_timer(
+            self.detect_interval,
+            self.update_detections_for_display,
+        )
 
-        self.get_logger().info('gripper_vision_node start')
-        if self.ignore_classes:
-            self.get_logger().info(
-                f'Ignoring YOLO classes: {sorted(self.ignore_classes)}'
-            )
-        if self.hand_classes:
-            self.get_logger().info(
-                f'Hand emergency classes: {sorted(self.hand_classes)}'
-            )
+        # --------------------------------------------------------------------------------
+        self.hand_classes_text = self.declare_parameter('hand_classes','hand').value
+        self.hand_conf_threshold = self.declare_parameter('hand_conf_threshold', 0.5).value
+        self.emergency_stop_cooldown = self.declare_parameter('emergency_stop_cooldown', 1.0).value
+        self.target_class = self.declare_parameter('target_class', '').value
+        self.ignore_classes_text = self.declare_parameter('ignore_classes', 'gripper, robot').value     # 그리퍼, 로봇 인식 제외
 
+        self.hand_classes = {           # {hand}
+            class_name.strip().lower()
+            for class_name in self.hand_classes_text.split(',')
+            if class_name.strip()
+        }
+        
+        self.ignore_classes = {     # {gripper, robot}
+            class_name.strip()
+            for class_name in self.ignore_classes_text.split(',')
+            if class_name.strip()
+        }
 
-    def load_yolo_model(self, model_path):
+        # 퍼블리셔
+        self.scan_key_card = self.create_publisher(Bool, 'key_card', 10)    # 키 카드 인식 여부 퍼블리시
+        self.emergency_stop_pub = self.create_publisher(Empty, '/emergency_stop', 10)
+        
+        # 서비스 서버
+        self.create_service(    # 인식한 물품의 3D 좌표를 계산
+            FineTuneQr,
+            'fine_tune_qr',
+            self.handle_fine_tune_qr,
+        )
+
+        self.get_logger().info('비전 인식 노드 시작')
+
+    def load_yolo_model(self, model_path):      # YOLO 모델 가져오기
         """Ultralytics YOLO 모델을 로드"""
         if YOLO is None:
             self.get_logger().error(
@@ -254,7 +231,7 @@ class GripperVisionNode(Node):
 
         cv2.imshow(self.realsense_window_name, frame)
         cv2.waitKey(1)
-
+    
     def update_detections_for_display(self):
         """화면 표시용 YOLO 추론을 일정 주기로 실행합니다."""
         now = time.time()
@@ -275,30 +252,27 @@ class GripperVisionNode(Node):
 
     def handle_fine_tune_qr(self, request, response):
         """YOLO로 상품 중심을 찾고 카메라 기준 3D 좌표를 반환합니다.
-
-        서비스 이름은 프로젝트 초안의 fine_tune_qr를 유지하지만,
-        현재 구현은 RealSense + YOLO 상품 인식 결과를 사용합니다.
         """
-        self.target_class = request.object
+        self.target_class = request.object  # 인식해야할 물품
         response.offset = Point()
         response.found = False
 
         if not request.start:
             return response
 
-        detection = self.detect_product_from_realsense()
+        detection = self.detect_product_from_realsense()    # 인식한 물품의 정보
         if detection is None:
             self.get_logger().warn('Product was not detected by YOLO')
             return response
 
-        point = self.pixel_to_camera_point(*detection['center'])
+        point = self.pixel_to_camera_point(*detection['center'])    # 인식한 물품의 중앙점 좌표 
         if point is None:
             self.get_logger().warn('Failed to convert product pixel to 3D point')
             return response
 
         response.offset = point
         response.found = True
-        response.detected_name = detection['name']
+        response.detected_name = detection['name']      # 인식한 물품 전송
         
         self.get_logger().info(
             f"Detected {detection['name']} score={detection['score']:.2f} "
@@ -319,8 +293,9 @@ class GripperVisionNode(Node):
             return None
 
         frame = self.rs_color_frame.copy()
-        inference_conf = min(self.conf_threshold, self.hand_conf_threshold)
-        results = self.model(frame, conf=inference_conf, verbose=False)
+        inference_conf = min(self.conf_threshold, self.hand_conf_threshold)     # 물품과 손 인식 score 중 낮은 score을 채택하여 손과 물품을 동시에 인식할 수 있도록 함
+        results = self.model(frame, conf=inference_conf, verbose=False)         # YOLO 인식 결과
+
         if not results:
             self.latest_detections = []
             return None
@@ -335,7 +310,7 @@ class GripperVisionNode(Node):
             class_id = int(box.cls[0])
             name = names.get(class_id, str(class_id))
             normalized_name = name.lower()
-            is_hand = normalized_name in self.hand_classes
+            is_hand = normalized_name in self.hand_classes  # 인식된 결과에 손이 있으면 True
 
             x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
             cx = int((x1 + x2) / 2)
@@ -348,12 +323,12 @@ class GripperVisionNode(Node):
                 'is_hand': is_hand,
             }
 
-            if is_hand and score >= self.hand_conf_threshold:
-                self.publish_emergency_stop(name, score)
+            if is_hand and score >= self.hand_conf_threshold: # 손이 검출되었고 최소 score보다 높을 때
+                self.publish_emergency_stop(name, score)    # 정지 명령 퍼블리시
                 display_detections.append(detection)
                 continue
 
-            if score < self.conf_threshold:
+            if score < self.conf_threshold:     # score 값이 낮으면 패스
                 continue
 
             # gripper처럼 로봇 부품으로 학습된 클래스는 상품으로 쓰지 않도록 제외
@@ -362,16 +337,17 @@ class GripperVisionNode(Node):
 
             # target_class를 지정한 경우에는 원하는 상품 클래스만 추출
             if self.target_class and self.target_class != "all" and name != self.target_class:
+                display_detections.append(detection)
                 continue
-
-            display_detections.append(detection)
-            product_detections.append(detection)
+            
+            display_detections.append(detection)    # 화면에 표시할 물품 추가
+            product_detections.append(detection)    # 인식해야할 물품을 리스트에 추가(all인 경우 모두 추가)
 
         self.latest_detections = display_detections
         if not product_detections:
             return None
 
-        return max(product_detections, key=lambda det: det['score'])
+        return max(product_detections, key=lambda det: det['score'])    # 가장 높은 score을 가진 한 물체만 반환
 
     def publish_emergency_stop(self, class_name, score):
         now = time.time()
@@ -379,11 +355,8 @@ class GripperVisionNode(Node):
             return
 
         self.last_emergency_stop_time = now
-        self.emergency_stop_pub.publish(Empty())
-        self.get_logger().error(
-            f'Human hand detected: {class_name} score={score:.2f}. '
-            'Published /emergency_stop.'
-        )
+        self.emergency_stop_pub.publish(Empty())    # 정지 명령 퍼블리시
+        self.get_logger().error(f'Human hand detected: {class_name} score={score:.2f}. ')
 
     def pixel_to_camera_point(self, x, y):
         """픽셀 좌표와 depth를 카메라 기준 3D 좌표로 변환합니다."""
@@ -394,17 +367,13 @@ class GripperVisionNode(Node):
         if not (0 <= x < width and 0 <= y < height):
             return None
 
-        # z = float(self.rs_depth_frame[y, x])
-        # if z <= 0:
-        #     self.get_logger().warn(f'{z}')
-        #     return None
-        patch = self.rs_depth_frame[y-5:y+6, x-5:x+6]
-        valid = patch[patch > 0]
+        patch = self.rs_depth_frame[y-5:y+6, x-5:x+6]       # 11 by 11 면적의 깊이 값
+        valid = patch[patch > 0]    # 유효한 깊이 값 필터링
 
-        if len(valid) == 0:
+        if len(valid) == 0: 
             return None
 
-        z = float(np.median(valid))
+        z = float(np.median(valid))     # 깊이 값의 중앙값을 z로 설정
 
         # 핀홀 카메라 모델 공식으로 픽셀 좌표를 카메라 기준 x, y, z 좌표로 변환
         point = Point()

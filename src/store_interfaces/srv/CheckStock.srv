@@ -1,3 +1,6 @@
+string current_name     # 방금 입고된 상품 이름
+string current_expiry   # 방금 입고된 상품 유통기한 (QR 스캔 값)
 ---
-string inventory_json
+string inventory_json   # 재고현황
+string closest_expiry_list  # 물품의 가장 빠른 유통기한
 bool success

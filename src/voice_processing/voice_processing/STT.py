@@ -1,12 +1,4 @@
 #vad_stt.py
-"""에너지 기반 VAD(Voice Activity Detection) 녹음 + Whisper STT.
-
-기존 STT.py(고정 5초 스냅샷)의 문제(발화가 경계에서 잘림, 긴 문장이 잘림)를
-해결하기 위해 발화 시작을 실시간으로 감지해서 녹음을 시작하고,
-일정 시간 무음이 이어지면 녹음을 종료하는 방식으로 동작한다.
-
-
-"""
 import os
 import tempfile
 from collections import deque
@@ -16,86 +8,68 @@ import scipy.io.wavfile as wav
 import sounddevice as sd
 from openai import OpenAI
 
-# 이 크기(RMS) 이상이어야 "발화"로 인정한다.
-# 값을 낮추면 더 작은 소리도 발화로 인식(민감), 높이면 더 큰 소리만 인식(둔감).
-# 튜닝할 때는 이 숫자 하나만 고치면 된다.
-MIN_NOISE_THRESHOLD = 150.0
-
+MIN_NOISE_THRESHOLD = 500
 
 class VadSTT:
-    """발화 구간만 녹음해서 Whisper로 변환하는 STT."""
-
     def __init__(
         self,
         openai_api_key,
-        device_index=None,
-        samplerate=16000,
-        chunk_sec=0.1,
-        silence_sec=0.3,       # 이 시간 동안 조용하면 발화가 끝난 것으로 판단
-        max_record_sec=8.0,    # 한 발화가 이 시간을 넘으면 강제 종료 (기존 5초 제한 완화)
-        start_timeout_sec=12.0,  # 이 시간 동안 발화가 시작 안 되면 포기하고 빈 결과 반환
+        device_index=None,     # 마이크 index
+        samplerate=16000,      # 주파수
+        chunk_sec=0.2,         # 청크 조각 0.1초
+        silence_sec=0.3,       # 0.3초 동안 조용하면 녹음이 끝난 것으로 판단
+        max_record_sec=8.0,    # 녹음이 8초를 넘으면 강제 종료
+        start_timeout_sec=12.0,  # 12초 동안 녹음이 시작 안 되면 빈 결과 반환
     ):
         self.client = OpenAI(api_key=openai_api_key)
-        self.device_index = device_index
-        self.samplerate = samplerate
-        self.chunk_sec = chunk_sec
-        self.chunk_size = int(samplerate * chunk_sec)
-        self.silence_chunks = max(1, int(silence_sec / chunk_sec))
-        self.max_chunks = max(1, int(max_record_sec / chunk_sec))
-        self.start_timeout_chunks = max(1, int(start_timeout_sec / chunk_sec))
-        # 발화 시작 직전 오디오도 놓치지 않도록 0.4초 분량을 미리 버퍼링
-        self.preroll = deque(maxlen=max(1, int(0.4 / chunk_sec)))
+        self.device_index = device_index       # 마이크 index
+        self.samplerate = samplerate           # 주파수 16000
+        self.chunk_sec = chunk_sec             # 청크 조각 0.1초
+        self.chunk_size = int(samplerate * chunk_sec)       # 0.1초의 청크 사이즈 = 1600
+        self.silence_chunks = max(1, int(silence_sec / chunk_sec))  # 3청크 (0.3초)
+        self.max_chunks = max(1, int(max_record_sec / chunk_sec))   # 80 청크(8초)
+        self.start_timeout_chunks = max(1, int(start_timeout_sec / chunk_sec))  # 120 청크(12초)
+        self.preroll = deque(maxlen=max(1, int(0.4 / chunk_sec)))   # 4개의 청크를 담을 덱 생성
 
-        if self.device_index is not None:
+        if self.device_index is not None:           # 마이크 장치 index를 지정해두지 않으면 기본 장치로 사용(스피커 장치는 None -> 기본장치 사용)
             sd.default.device = (self.device_index, None)
 
-        # 노이즈 플로어는 노드 시작 시 1회만 측정한다.
-        # (매 발화마다 재측정하면 사이클마다 0.5초씩 불필요한 지연이 생긴다)
-        # 참고: 지금은 판단에 직접 쓰이지 않고, 실제 배경소음 수준을 파악해서
-        # MIN_NOISE_THRESHOLD 값을 얼마로 잡을지 정하는 데 참고용으로만 사용한다.
-        self._noise_floor = self._estimate_noise_floor()
-        print(f"[VadSTT] 측정된 noise_floor={self._noise_floor:.1f}  적용 threshold(고정값)={MIN_NOISE_THRESHOLD:.1f}")
-
-    def refresh_noise_floor(self):
-        """주변 소음 수준이 크게 바뀐 것 같을 때 수동으로 재측정하고 싶으면 호출."""
-        self._noise_floor = self._estimate_noise_floor()
-        print(f"[VadSTT] noise_floor 재측정: {self._noise_floor:.1f}")
+        # 자동으로 0.5초동안 노이즈를 판별해서 기준값을 결정하는 코드
+        # self._noise_floor = self._estimate_noise_floor()        # 0.5초 분량의 오디오 데이터 실효값의 중앙값(노이즈)
+        # print(f"[VadSTT] 측정된 noise_floor={self._noise_floor:.1f}  적용 threshold(고정값)={MIN_NOISE_THRESHOLD:.1f}")
 
     def speech2text(self) -> str:
-        """발화 구간을 녹음해서 텍스트로 변환. 실패/무음이면 빈 문자열 반환."""
-        audio = self._record_until_silence()
-        if audio is None or len(audio) == 0:
+        audio = self._record_until_silence()     # 오디오 데이터 받아옴
+        if audio is None or len(audio) == 0:     # 녹음이 안됬을 경우
             return ""
 
         temp_path = None
+
         try:
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:      # 오디오 데이터 임시 파일 생성
                 wav.write(temp_wav.name, self.samplerate, audio)
                 temp_path = temp_wav.name
 
-            with open(temp_path, "rb") as f:
+            with open(temp_path, "rb") as f:        # whosper-1 모델을 불러와서 입력된 오디오 데이터를 텍스트로 변환
                 transcript = self.client.audio.transcriptions.create(
                     model="whisper-1",
                     file=f,
                     language="ko",
                 )
-            return transcript.text
+            return transcript.text      # 변환된 텍스트를 return
 
         except Exception as e:
-            # Whisper API 호출 실패(네트워크 오류 등)로 노드 전체가 죽지 않도록 방어.
-            # TODO: ROS2 노드 컨텍스트에서 사용할 때는 print 대신 get_logger().error()로 교체 권장
             print(f"❌ Whisper 변환 실패: {e}")
             return ""
 
         finally:
             if temp_path is not None:
                 try:
-                    os.unlink(temp_path)
+                    os.unlink(temp_path)    # 임시 파일 삭제
                 except OSError:
                     pass
 
     def _record_until_silence(self):
-        """발화 시작을 감지하고, 무음이 일정 시간 이어지면 녹음을 마친다."""
         threshold = MIN_NOISE_THRESHOLD  # 변경 지점: noise_floor 기반 계산 → 고정 상수
 
         frames = []
@@ -110,59 +84,59 @@ class VadSTT:
             blocksize=self.chunk_size,
             device=self.device_index,
         ) as stream:
-            while total_chunks < self.start_timeout_chunks + self.max_chunks:
-                chunk, _ = stream.read(self.chunk_size)
-                chunk = chunk.reshape(-1).copy()
-                level = float(np.sqrt(np.mean(chunk.astype(np.float32) ** 2)))
+            while total_chunks < self.start_timeout_chunks + self.max_chunks:   # 200 청크 이하 시(20초 동안)
+                chunk, _ = stream.read(self.chunk_size)     #  0.1초 분량 오디오 데이터(2차원)
+                chunk = chunk.reshape(-1).copy()        # 1차원으로 변환
+                level = float(np.sqrt(np.mean(chunk.astype(np.float32) ** 2)))  # 오디오 샘플의 실효값 계산
 
-                print(f"\r레벨: {level:7.1f}  기준(threshold): {threshold:.1f}  {'🔊 발화중' if level >= threshold else '   '}", end="", flush=True)
+                print(f"\r레벨: {level:7.1f}  기준(threshold): {threshold:.1f}  {'🔊 음성 녹음중' if level >= threshold else '   '}", end="", flush=True)
 
                 if not started:
-                    self.preroll.append(chunk)
+                    self.preroll.append(chunk)  # 0.1초 오디오 데이터를 덱에 추가
                     total_chunks += 1
 
-                    if level >= threshold:
-                        started = True
-                        frames.extend(self.preroll)
-                        silence_count = 0
+                    if level >= threshold:      # 0.1초 오디오 데이터의 실효값이 기준값을 넘으면(소리가 클 때)
+                        started = True          # 음성 녹음 시작
+                        frames.extend(self.preroll)     # 오디오 데이터를 리스트에 추가
+                        silence_count = 0       # 음성 녹음 X 카운트 초기화(음성 녹음을 시작했으므로)
                     elif total_chunks >= self.start_timeout_chunks:
-                        # 제한 시간 안에 발화가 시작되지 않음
+                        # 제한 시간 안에 음성 녹음이 시작되지 않음
                         return None
                     continue
 
-                frames.append(chunk)
+                frames.append(chunk)    # 오디오 데이터를 리스트에 추가
                 total_chunks += 1
 
-                if level < threshold:
-                    silence_count += 1
-                else:
-                    silence_count = 0
+                if level < threshold:   # 기준값보다 실효값이 낮을때(소리가 작을 때)
+                    silence_count += 1  # 음성 녹음 X 카운트 증가
+                else:                   # 기준값보다 실효값이 클 때(계속 말하고 있을 때)
+                    silence_count = 0   # 음성 녹음 X 카운트 초기화(말하는 중이므로)
 
-                if silence_count >= self.silence_chunks:
-                    break
+                if silence_count >= self.silence_chunks:    # 0.3초 동안 말이 없으면
+                    break   
 
-                if len(frames) >= self.max_chunks:
+                if len(frames) >= self.max_chunks:      # 음성 녹음이 8초를 넘으면
                     break
 
         if not frames:
             return None
 
-        return np.concatenate(frames).astype(np.int16)
+        return np.concatenate(frames).astype(np.int16)  # 쪼개진 청크들을 합쳐 오디오 데이터로 return
 
-    def _estimate_noise_floor(self):
-        """0.5초간 오디오를 측정해서 현재 주변 소음 수준(중앙값)을 추정."""
-        levels = []
-        with sd.InputStream(
-            samplerate=self.samplerate,
-            channels=1,
-            dtype="int16",
-            blocksize=self.chunk_size,
-            device=self.device_index,
-        ) as stream:
-            for _ in range(max(1, int(0.5 / self.chunk_sec))):
-                chunk, _ = stream.read(self.chunk_size)
-                chunk = chunk.reshape(-1)
-                level = float(np.sqrt(np.mean(chunk.astype(np.float32) ** 2)))
-                levels.append(level)
+    # def _estimate_noise_floor(self):
+    #     """0.5초간 오디오를 측정해서 현재 주변 소음 수준(중앙값)을 추정."""
+    #     levels = []
+    #     with sd.InputStream(
+    #         samplerate=self.samplerate,
+    #         channels=1,
+    #         dtype="int16",
+    #         blocksize=self.chunk_size,
+    #         device=self.device_index,
+    #     ) as stream:
+    #         for _ in range(max(1, int(0.5 / self.chunk_sec))):      # 5번(0.5초 분량)
+    #             chunk, _ = stream.read(self.chunk_size)     # 0.1초 분량의 오디오 샘플
+    #             chunk = chunk.reshape(-1)       # 2차원 오디오 샘플을 1차원 벡터화
+    #             level = float(np.sqrt(np.mean(chunk.astype(np.float32) ** 2)))      # 오디오 샘플의 실효값을 계산
+    #             levels.append(level)    # 리스트에 실효값 추가
 
-        return float(np.median(levels)) if levels else 100.0
+    #     return float(np.median(levels)) if levels else 100.0    # 0.5초 분량의 실효값의 중앙값을 반환

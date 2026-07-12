@@ -32,7 +32,7 @@ setup(
             'robot_control = store_node.robot_control:main',
             'database_manager = store_node.database_manager:main',
             'admin_auth_manager = store_node.admin_auth_manager:main',
-            'api_server = store_node.main:main',
+            'api_server = store_node.api_manager:main',
             'counter_qr_node = store_node.counter_qr_node:main',
             'gripper_vision_node = store_node.gripper_vision_node:main',
         ],

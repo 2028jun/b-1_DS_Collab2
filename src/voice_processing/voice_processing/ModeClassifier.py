@@ -5,14 +5,14 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 
-load_dotenv(dotenv_path=".env")
-openai_api_key = os.getenv("OPENAI_API_KEY")
+load_dotenv(dotenv_path=".env")     # .env 파일을 환경 변수로 등록
+openai_api_key = os.getenv("OPENAI_API_KEY")        # .env 파일의 API 키를 변수에 등록
 
 
 class ModeClassifier:
     def __init__(self):
 
-        self.llm = ChatOpenAI(
+        self.llm = ChatOpenAI(      # gpt-4o 모델 불러오기
             model="gpt-4o",
             temperature=0,
             openai_api_key=openai_api_key,
@@ -70,40 +70,37 @@ ORDER
 
 "{user_input}"
 """
+# gpt-4o에 입고/서비스/주문 모드를 인식하도록 프롬프트 작성 
 
-        self.prompt_template = PromptTemplate(
+        self.prompt_template = PromptTemplate(      # 프롬프트 문장
             input_variables=["user_input"],
             template=prompt_content,
         )
 
-        self.lang_chain = self.prompt_template | self.llm
-
-
+        self.lang_chain = self.prompt_template | self.llm   # 프롬프트 문장을 gpt-4o에 연결한 변수 (랭체인 라이브러리에서는 | : 연결파이프로 작동)
 
     def classify(self, text):
 
         try:
-            response = self.lang_chain.invoke(
-                {"user_input": text}
-            )
+            response = self.lang_chain.invoke({"user_input": text})     # 랭체인 구동 -> 사용자의 음성 단어와 프롬프트가 결합되어 gpt-4o에 전달, 응답을 받아옴
 
             content = response.content.strip()
             content = content.replace("```json", "").replace("```", "").strip()
 
             print(f"LLM 응답: {content}")
 
-            result = json.loads(content)
+            result = json.loads(content)        # json을 딕셔너리 형식으로 변환
 
-            mode = result.get("mode", "ORDER")
+            mode = result.get("mode", "ORDER")  # 딕셔너리에서 mode의 value값(입고/서비스/주문)을 받아옴, 기본값은 주문 모드
 
-            if mode not in ["WAREHOUSING", "ORDER", "SERVICE"]:
+            if mode not in ["WAREHOUSING", "ORDER", "SERVICE"]: # mode에 해당되는 단어가 없으면 ORDER 모드로 판단
                 mode = "ORDER"
 
             print("\n[Mode Classification]")
             print(f"입력 문장 : {text}")
             print(f"분류 결과 : {mode}")
 
-            return mode
+            return mode     # 모드 return
 
         except Exception as e:
 

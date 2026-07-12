@@ -4,20 +4,18 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 
-
-load_dotenv(dotenv_path=".env")
-openai_api_key = os.getenv("OPENAI_API_KEY")
-
+load_dotenv(dotenv_path=".env")     # .env 파일을 환경 변수로 등록
+openai_api_key = os.getenv("OPENAI_API_KEY")    # .env 파일의 API 키를 변수에 등록
 
 class WakeupWord:
     def __init__(self):
         self.llm = ChatOpenAI(
-            model="gpt-4o",
-            temperature=0,
+            model="gpt-4o",     # gpt-4o 모델 불러오기
+            temperature=0,      # 모델의 창의성(확률적 다양성) 제한
             openai_api_key=openai_api_key,
         )
 
-        prompt = """
+        prompt = """        
 당신은 편의점 로봇 시스템의 호출어 판별기입니다.
 
 목표:
@@ -56,25 +54,26 @@ class WakeupWord:
 사용자 입력:
 "{user_input}"
 """
+# gpt-4o에 '편돌이'라는 호출어 이름을 인식하도록 프롬프트 작성
 
-        self.prompt_template = PromptTemplate(
-            input_variables=["user_input"],
+        self.prompt_template = PromptTemplate(  # 프롬프트 문장
+            input_variables=["user_input"],     # 사용자의 음성('편돌아) 단어가 들어가는 변수
             template=prompt,
         )
 
-        self.chain = self.prompt_template | self.llm
+        self.lang_chain = self.prompt_template | self.llm    # 프롬프트 문장을 gpt-4o에 연결한 변수 (랭체인 라이브러리에서는 | : 연결파이프로 작동)
 
     def is_wakeup(self, text: str) -> bool:
         try:
-            response = self.chain.invoke({"user_input": text})
+            response = self.lang_chain.invoke({"user_input": text})      # 랭체인 구동 -> 사용자의 음성 단어와 프롬프트가 결합되어 gpt-4o에 전달, 응답을 받아옴
 
-            content = response.content.strip()
-            content = content.replace("```json", "").replace("```", "").strip()
+            content = response.content.strip()      # 응답의 공백 제거
+            content = content.replace("```json", "").replace("```", "").strip()     # json, ''' 단어를 지우고 공백 제거
 
-            print(f"호출어 판별 LLM 응답: {content}")
+            print(f"호출어 판별 LLM 응답: {content}")       # 처리된 json 문자열 (true / false)
 
-            data = json.loads(content)
-            return bool(data.get("wakeup", False))
+            data = json.loads(content)      # json을 딕셔너리 형식으로 변환
+            return bool(data.get("wakeup", False))  # 딕셔너리에서 키의 값을 꺼내고 bool 형식으로 변환하여 return, 없으면 False
 
         except Exception as e:
             print(f"❌ 호출어 판별 실패: {e}")
