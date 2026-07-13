@@ -87,8 +87,11 @@ class VoiceManagerNode(Node):
             self.get_logger().info("서비스 모드로 전환합니다.")
             self.request_admin_auth_manager("사용자")       # 사용자 모드로 변경 요청
         elif mode == "WAREHOUSING":
-            self.get_logger().info("입고 모드로 전환합니다.")
+            self.get_logger().info("입고를 시작합니다.")
             self.request_admin_auth_manager("입고")       # 입고 모드로 변경 요청
+        elif mode == "DISPOSE":
+            self.get_logger().info("폐기를 시작합니다.")
+            self.request_admin_auth_manager("폐기")       # 입고 모드로 변경 요청
         else:
             self.request_main_order_manager(command_text)   # 주문 요청
  

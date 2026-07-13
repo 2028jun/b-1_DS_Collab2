@@ -49,4 +49,11 @@ def generate_launch_description():
             output='screen'
         ),
 
+        Node(
+            package='store_node',       
+            executable='database_manager', 
+            name='DB',
+            output='screen'
+        ),
+
     ])

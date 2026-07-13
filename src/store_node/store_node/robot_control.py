@@ -105,7 +105,7 @@ class RoobotControlNode(Node):
                 if pos_data and len(pos_data) > 0:
                     return pos_data[0]
             except IndexError:
-                self.get_logger().warn(f"⚠️ 직교 좌표(posx) 수신 지연... 재시도 중 ({i+1}/{max_retries})")
+                # self.get_logger().warn(f"⚠️ 직교 좌표(posx) 수신 지연... 재시도 중 ({i+1}/{max_retries})")
                 time.sleep(delay)
             except Exception as e:
                 self.get_logger().error(f"posx 읽기 중 예외 발생: {e}")
@@ -123,7 +123,7 @@ class RoobotControlNode(Node):
                         return joint_data[0] if isinstance(joint_data[0], list) else joint_data
                     return joint_data
             except (IndexError, TypeError):
-                self.get_logger().warn(f"⚠️ 관절 각도(posj) 수신 지연... 재시도 중 ({i+1}/{max_retries})")
+                # self.get_logger().warn(f"⚠️ 관절 각도(posj) 수신 지연... 재시도 중 ({i+1}/{max_retries})")
                 time.sleep(delay)
             except Exception as e:
                 self.get_logger().error(f"posj 읽기 중 예외 발생: {e}")
@@ -270,7 +270,7 @@ class RoobotControlNode(Node):
 
     def pick_and_move(self, x, y, z):
         """계산된 절대 좌표로 이동하여 물체를 잡고 놓는 함수"""
-        current_pos = get_current_posx()[0]
+        current_pos = self.get_safe_current_posx()
         pick_pos1 = posx([x, y+200, z, current_pos[3], current_pos[4], current_pos[5]])    # 평면으로 이동(진열대와 부딪힘 방지)
         pick_pos2 = posx([x, y, z, current_pos[3], current_pos[4], current_pos[5]])     # 물품 잡기 위치 이동
 
@@ -307,8 +307,6 @@ class RoobotControlNode(Node):
 
             pick_pos_back = posx(0, 200, 0, 0, 0, 0)
             self.safe_movel(pick_pos_back, vel=VELOCITY, acc=ACC, mod=DR_MV_MOD_REL)
-
-            self.safe_movel(self.scan_home, vel=VELOCITY, acc=ACC)
 
     def trigger_qr_scan(self):
         self.get_logger().info("📸 QR 스캔 위치로 이동합니다.")
@@ -463,6 +461,16 @@ class RoobotControlNode(Node):
         elif self.behavior == "INSERT_TO_BACK":    
             self.process_insert_behavior(goal_handle, result, place, is_front=False)
             return result
+        
+        elif self.behavior == "DISPOSE_OBJECT": 
+            self.safe_movel(self.basket_up, vel=VELOCITY, acc=ACC)
+            self.safe_movel(self.basket_down, vel=VELOCITY, acc=ACC)
+            self.gripper.open_gripper()
+            self.safe_movel(self.basket_up, vel=VELOCITY, acc=ACC)
+            result.success = True
+            goal_handle.succeed()
+            return result
+        
         else:
             self.get_logger().warn("알 수 없는 명령입니다.")
             result.success = False
@@ -476,7 +484,7 @@ class RoobotControlNode(Node):
             True: {  # FRONT 모드
                 "check_place": 2,
                 "temp_pos": self.drop_temp2,
-                "restock_y": -80,
+                "restock_y": -70,
                 "retreat_y": 200
             },
             False: { # BACK 모드

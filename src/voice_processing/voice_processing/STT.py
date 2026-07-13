@@ -8,7 +8,7 @@ import scipy.io.wavfile as wav
 import sounddevice as sd
 from openai import OpenAI
 
-MIN_NOISE_THRESHOLD = 500
+MIN_NOISE_THRESHOLD = 300
 
 class VadSTT:
     def __init__(
@@ -33,10 +33,6 @@ class VadSTT:
 
         if self.device_index is not None:           # 마이크 장치 index를 지정해두지 않으면 기본 장치로 사용(스피커 장치는 None -> 기본장치 사용)
             sd.default.device = (self.device_index, None)
-
-        # 자동으로 0.5초동안 노이즈를 판별해서 기준값을 결정하는 코드
-        # self._noise_floor = self._estimate_noise_floor()        # 0.5초 분량의 오디오 데이터 실효값의 중앙값(노이즈)
-        # print(f"[VadSTT] 측정된 noise_floor={self._noise_floor:.1f}  적용 threshold(고정값)={MIN_NOISE_THRESHOLD:.1f}")
 
     def speech2text(self) -> str:
         audio = self._record_until_silence()     # 오디오 데이터 받아옴
@@ -122,21 +118,3 @@ class VadSTT:
             return None
 
         return np.concatenate(frames).astype(np.int16)  # 쪼개진 청크들을 합쳐 오디오 데이터로 return
-
-    # def _estimate_noise_floor(self):
-    #     """0.5초간 오디오를 측정해서 현재 주변 소음 수준(중앙값)을 추정."""
-    #     levels = []
-    #     with sd.InputStream(
-    #         samplerate=self.samplerate,
-    #         channels=1,
-    #         dtype="int16",
-    #         blocksize=self.chunk_size,
-    #         device=self.device_index,
-    #     ) as stream:
-    #         for _ in range(max(1, int(0.5 / self.chunk_sec))):      # 5번(0.5초 분량)
-    #             chunk, _ = stream.read(self.chunk_size)     # 0.1초 분량의 오디오 샘플
-    #             chunk = chunk.reshape(-1)       # 2차원 오디오 샘플을 1차원 벡터화
-    #             level = float(np.sqrt(np.mean(chunk.astype(np.float32) ** 2)))      # 오디오 샘플의 실효값을 계산
-    #             levels.append(level)    # 리스트에 실효값 추가
-
-    #     return float(np.median(levels)) if levels else 100.0    # 0.5초 분량의 실효값의 중앙값을 반환

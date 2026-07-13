@@ -52,6 +52,15 @@ ORDER
 - 일반 손님 요청
 - 기타 모든 일반 명령
 
+DISPOSE
+- 폐기 모드
+- 폐기 해줘
+- 폐기 시작
+- 폐기 고고
+- 폐기 하자
+- '폐기'라는 단어가 포함되어 있으면 DISPOSE로 분류하세요
+- 비슷한 발음 오인식도 폐기 의도로 판단 가능하면 DISPOSE로 분류하세요
+
 <출력 형식>
 
 반드시 JSON만 출력하세요.
@@ -65,6 +74,10 @@ ORDER
 또는
 
 {{"mode":"ORDER"}}
+
+또는 
+
+{{"mode":"DISPOSE"}}
 
 <사용자 입력>
 
@@ -93,7 +106,7 @@ ORDER
 
             mode = result.get("mode", "ORDER")  # 딕셔너리에서 mode의 value값(입고/서비스/주문)을 받아옴, 기본값은 주문 모드
 
-            if mode not in ["WAREHOUSING", "ORDER", "SERVICE"]: # mode에 해당되는 단어가 없으면 ORDER 모드로 판단
+            if mode not in ["WAREHOUSING", "ORDER", "SERVICE", "DISPOSE"]: # mode에 해당되는 단어가 없으면 ORDER 모드로 판단
                 mode = "ORDER"
 
             print("\n[Mode Classification]")

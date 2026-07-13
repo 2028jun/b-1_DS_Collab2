@@ -23,6 +23,8 @@ class DatabaseNode(Node):
         self.last_qr_data = None
         self.qr_data = None
         self.auth_status = "SERVICE"
+        self.last_auth_status = "SERVICE"
+        self.dispose_mode = False
 
         try:        # MySQL 데이터베이스 연결
             self.conn = pymysql.connect(
@@ -62,11 +64,15 @@ class DatabaseNode(Node):
 
         return response
 
-    def auth_sub_callback(self, msg):       # 현재 로봇 동작 여부
+    def auth_sub_callback(self, msg):       # 동작 모드
         parts = msg.data.split(',')
         self.auth_status = parts[0].strip()
+        if self.last_auth_status != self.auth_status:
+            self.last_auth_status = self.auth_status
+            self.last_qr_data = None
+            self.qr_data = None
     
-    def qr_sub_db_callback(self, msg):      # 사람이 직접  QR을 찍었을 때 or 입고 모드 일때
+    def qr_sub_db_callback(self, msg):      # 사람이 직접  QR을 찍었을 때 or 입고/폐기 모드 일때
         self.qr_data = msg.data
         if self.last_qr_data != self.qr_data:
             success = self.handle_update_stock()    # 재고 업데이트
@@ -105,26 +111,50 @@ class DatabaseNode(Node):
 
         if self.auth_status == "ADMIN":
             # 물품 입고, 데이터베이스에 상품 등록
-            sql = """
-                INSERT INTO products (name, SN, price, expiry_date)
-                VALUES (%s, %s, %s, %s) 
-                ON DUPLICATE KEY UPDATE
-                    name = VALUES(name),
-                    price = VALUES(price),
-                    expiry_date = VALUES(expiry_date);
-            """
-            try:
-                with self.conn.cursor() as cursor:
-                    cursor.execute(sql, (product_name, serial_number, clean_price, expiry_date))
-                    self.conn.commit()
-                    
-                    self.get_logger().info(f"데이터베이스 등록 완료!")
-                    success = True
-                    
-            except Exception as e:
-                self.conn.rollback()
-                self.get_logger().error(f"❌ 관리자 상품 등록 중 SQL 에러 발생: {e}")
-                success = False
+            if not self.dispose_mode:       # 입고 모드
+                sql = """
+                    INSERT INTO products (name, SN, price, expiry_date)
+                    VALUES (%s, %s, %s, %s) 
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        price = VALUES(price),
+                        expiry_date = VALUES(expiry_date);
+                """
+                try:
+                    with self.conn.cursor() as cursor:
+                        cursor.execute(sql, (product_name, serial_number, clean_price, expiry_date))    # 데이터베이스 등록
+                        self.conn.commit()
+                        
+                        self.get_logger().info(f"데이터베이스 등록 완료!")
+                        success = True
+                        
+                except Exception as e:
+                    self.conn.rollback()
+                    self.get_logger().error(f"❌ 관리자 상품 등록 중 SQL 에러 발생: {e}")
+                    success = False
+            elif self.dispose_mode: # 폐기 모드
+                sql_delete_stock = """                  
+               DELETE FROM products 
+                WHERE SN = %s;
+                """
+                try:
+                    with self.conn.cursor() as cursor:
+                        
+                        affected_rows = cursor.execute(sql_delete_stock, (serial_number,))  # 데이터베이스 삭제
+                        
+                        if affected_rows > 0:
+                            self.conn.commit()
+                            self.get_logger().info(f"재고 삭제 완료")
+                            success = True
+                        else:
+                            self.conn.rollback()
+                            self.get_logger().warn(f"⚠️ 출고 실패: 매대 재고(products)에 존재하지 않는 SN입니다: {serial_number}")
+                            success = False
+                            
+                except Exception as e:
+                    self.conn.rollback()
+                    self.get_logger().error(f"❌ 서비스 모드 출고 처리 중 SQL 에러 발생: {e}")
+                    success = False
         
         elif self.auth_status == "SERVICE":
             # 물품 판매 -> 재고 삭제
@@ -182,22 +212,35 @@ class DatabaseNode(Node):
     def check_expiry_date(self, request, response):        # 가장 빠른 유통기한을 추출
         response.closest_expiry_list = "[]"
         response.success = False
+        self.dispose_mode = request.dispose_mode
 
-        sql_min_expiry = """
-            SELECT name, MIN(expiry_date) AS expiry_date
-            FROM products
-            WHERE SN NOT IN (
-                SELECT temp.SN FROM (
-                    SELECT SN FROM products 
-                    WHERE name = %s AND expiry_date = %s 
-                    LIMIT 1
-                ) AS temp
-            )
-            GROUP BY name;
-        """
+
+        if self.dispose_mode:
+            self.get_logger().info("🗑️ [폐기 모드] 전체 테이블 대상 유통기한 조회를 시작합니다.")
+            sql_query = """
+                SELECT name, MIN(expiry_date) AS expiry_date
+                FROM products
+                WHERE expiry_date IS NOT NULL
+                GROUP BY name;
+            """
+            query_params = () # 파라미터 필요 없음
+        elif not self.dispose_mode:
+            sql_query  = """
+                SELECT name, MIN(expiry_date) AS expiry_date
+                FROM products
+                WHERE SN NOT IN (
+                    SELECT temp.SN FROM (
+                        SELECT SN FROM products 
+                        WHERE name = %s AND expiry_date = %s 
+                        LIMIT 1
+                    ) AS temp
+                )
+                GROUP BY name;
+            """
+            query_params = (request.current_name, request.current_expiry)
         try:
             with self.conn.cursor() as cursor:
-                cursor.execute(sql_min_expiry, (request.current_name, request.current_expiry))
+                cursor.execute(sql_query , query_params)
                 # DictCursor이므로 [{'name': '삼각김밥', 'expiry_date': '2026-07-13'}, ...] 형태로 수신
                 closest_items_list = cursor.fetchall() 
                 

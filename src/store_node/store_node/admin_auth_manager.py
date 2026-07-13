@@ -6,6 +6,8 @@ from store_interfaces.action import RobotPickPlace
 from std_msgs.msg import Bool, String, Empty
 import time
 import json
+from datetime import datetime
+
 try:
     from dsr_msgs2.srv import MoveStop
     MOVE_STOP_IMPORT_ERROR = None
@@ -44,6 +46,7 @@ class AdminAuthManagerNode(Node):
         self.admin_is_robot_busy = False
         self.found_object = None
         self.is_exist = True
+        self.dispose_mode = False
 
         self.get_logger().info("관리자 노드 시작")
 
@@ -73,6 +76,11 @@ class AdminAuthManagerNode(Node):
                 self.trigger_warehousing_product_loop()     # 입고 루프 시작
             else:
                 self.get_logger().warn(f"관리자 모드가 아니므로 입고 할 수 없습니다.")
+        elif "폐기" in request.voice_text:
+            if self.auth_status == "ADMIN":     # 관리자 모드 일때만 입고 실행
+                self.trigger_dispose_product_loop()     # 입고 루프 시작
+            else:
+                self.get_logger().warn(f"관리자 모드가 아니므로 폐기 할 수 없습니다.")
         else:
             self.get_logger().warn(f"알 수 없는 보안 명령문: '{request.voice_text}'")
             response.success = False
@@ -80,6 +88,14 @@ class AdminAuthManagerNode(Node):
 
         response.success = True 
         return response
+
+    def trigger_dispose_product_loop(self):
+        self.admin_is_robot_busy = True
+        self.dispose_mode = True
+        request = request = CheckStock.Request()
+        request.dispose_mode = self.dispose_mode
+        expiry_future = self.expiry_cli.call_async(request)     # 유통기한 정보 요청
+        expiry_future.add_done_callback(self.expiry_response_callback)         
     
     def key_card_scan_callback(self, msg):       # 키 카드 스캔 결과
         req = AdminAuth.Request()
@@ -97,7 +113,10 @@ class AdminAuthManagerNode(Node):
         self.trigger_move_robot(behavior_name="SCAN_AND_PICK_WAREHOUSE", next_step_callback=self.trigger_scan_qr, object_name=object_name)
 
     def trigger_scan_qr(self):      # QR 스캔 요청
-        self.trigger_move_robot(behavior_name="QR_SCAN", next_step_callback=self.trigger_drop_temp)
+        if self.dispose_mode:
+            self.trigger_move_robot(behavior_name="QR_SCAN", next_step_callback=self.trigger_dispose)
+        else:
+            self.trigger_move_robot(behavior_name="QR_SCAN", next_step_callback=self.trigger_drop_temp)
     
     def trigger_drop_temp(self):    # 유통기한 비교해서 입고하기
         req = CheckStock.Request()
@@ -105,6 +124,7 @@ class AdminAuthManagerNode(Node):
         check_stock.add_done_callback(self.check_stock_callback)    # 재고 확인 결과
     
     def check_stock_callback(self, future):
+        self.dispose_mode = False
         try:
             response = future.result()
             
@@ -121,6 +141,7 @@ class AdminAuthManagerNode(Node):
                     request = CheckStock.Request()
                     request.current_name = self.found_object
                     request.current_expiry = self.qr_data.get("expiry_date", "")
+                    request.dispose_mode = self.dispose_mode
 
                     if not self.expiry_cli.service_is_ready():
                         self.get_logger().error("❌ 유통기한 조회 서비스(/check_expiry)가 준비되지 않았습니다.")
@@ -129,6 +150,7 @@ class AdminAuthManagerNode(Node):
                     if self.found_object == "smoke":
                         self.trigger_restock("front0")  # 상춤 진열(앞쪽)
                         return
+                    
                     
                     expiry_future = self.expiry_cli.call_async(request)     # 유통기한 정보 요청
                     expiry_future.add_done_callback(self.expiry_response_callback)         
@@ -145,30 +167,62 @@ class AdminAuthManagerNode(Node):
 
                 raw_json = response.closest_expiry_list.strip() if response.closest_expiry_list else "[]"
                 
-                # 데이터가 텅 비어 있다면 json.loads에서 char 0 에러가 나므로 사전 차단
-                if not raw_json or raw_json == "":
-                    self.get_logger().error("수신된 JSON 데이터가 비어 있습니다. 선입선출 분기를 기본값(DROP_TEMP1)으로 처리합니다.")
-                    self.trigger_move_robot(behavior_name="DROP_TEMP1", next_step_callback=self.trigger_move_scan)
+                # 💡 [보완 3] 데이터가 텅 비어 있을 때 입고/폐기 모드 양쪽 다 무인 시스템이 갇히지 않도록 탈출선 정돈
+                if not raw_json or raw_json == "" or raw_json == "[]":
+                    self.get_logger().warn("⚠️ 유통기한 조회 결과가 텅 비어있습니다.")
+                    if not self.dispose_mode:
+                        self.trigger_move_robot(behavior_name="DROP_TEMP1", next_step_callback=self.trigger_move_scan)
+                    else:
+                        self.get_logger().info("✅ 폐기 모드: 매대에 재고가 없으므로 홈 위치로 복귀합니다.")
+                        self.done_warehousing()   # MOVE_HOME 복귀 시퀀스 호출
                     return
 
                 # DB 노드가 요약해 준 [{'name': '상품명', 'expiry_date': '기한'}, ...] 파싱
-                closest_expiry_list = json.loads(response.closest_expiry_list)
-                
-                # 전체 목록 중 현재 로봇이 다루고 있는 물품(self.found_object) 정보만 추출
-                target_db_item = next((item for item in closest_expiry_list if item['name'] == self.found_object), None)
-                
-                # 날짜 문자열 추출 (형식: YYYY-MM-DD)
-                db_closest_date = target_db_item['expiry_date']     # 진열대 상품 중 가장 임박한 유통기한
-                current_scanned_date = self.qr_data.get("expiry_date")  # 입고 상품의 유통기한
-                
-                self.get_logger().info(f"진열대 최단 유총기한: {db_closest_date} / 입고된 유총기한: {current_scanned_date}")
-                
-                if current_scanned_date < db_closest_date:
-                    self.get_logger().warn("새로 입고하려는 물품의 유통기한이 더 짧습니다! 그대로 진열합니다.")
-                    self.trigger_restock("front0")   # 앞쪽에 진열
+                closest_expiry_list = json.loads(raw_json)
+
+                if self.dispose_mode:
+                    # 오늘 날짜를 YYYY-MM-DD 문자열 포맷으로 획득
+                    # today_str = datetime.now().strftime('%Y-%m-%d')
+                    today_str = "2027-06-02"
+                    
+                    expired_items = []
+                    for item in closest_expiry_list:
+                        name = item.get('name')
+                        expiry_date = item.get('expiry_date')
+                        
+                        if expiry_date and expiry_date <= today_str:
+                            self.get_logger().warn(f"[폐기 대상 발견] 상품: {name} (유통기한: {expiry_date} <= 오늘: {today_str})")
+                            expired_items.append(item)
+                    
+                    if not expired_items:
+                        self.get_logger().info("✅ 매대에 유통기한이 지난 폐기 대상 물품이 없습니다. 시퀀스를 종료합니다.")
+                        self.done_warehousing()
+                        return
+
+                    target_discard = expired_items[0]
+                    self.found_object = target_discard['name'] # 로봇이 잡을 타겟 고정
+                    
+                    self.get_logger().error(f"☠️ [{self.found_object}] 상품 폐기 시작")
+                    # 예시: 폐기 궤적 이동 -> 다음 스캔이나 루프로 연동
+                    self.trigger_move_robot(behavior_name="MOVE_SCAN", 
+                                            next_step_callback=lambda: self.trigger_pick_for_drop(self.found_object))
+                    return
                 else:
-                    self.get_logger().info("신규 물품의 유통기한이 더 넉넉합니다. 선입선출을 실시합니다.")
-                    self.trigger_move_robot(behavior_name="DROP_TEMP1", next_step_callback = self.trigger_move_scan)     # 선입선출 실행
+                    # 전체 목록 중 현재 로봇이 다루고 있는 물품(self.found_object) 정보만 추출
+                    target_db_item = next((item for item in closest_expiry_list if item['name'] == self.found_object), None)
+                    
+                    # 날짜 문자열 추출 (형식: YYYY-MM-DD)
+                    db_closest_date = target_db_item['expiry_date']     # 진열대 상품 중 가장 임박한 유통기한
+                    current_scanned_date = self.qr_data.get("expiry_date")  # 입고 상품의 유통기한
+                    
+                    self.get_logger().info(f"진열대 최단 유총기한: {db_closest_date} / 입고된 유총기한: {current_scanned_date}")
+                    
+                    if current_scanned_date < db_closest_date:
+                        self.get_logger().warn("새로 입고하려는 물품의 유통기한이 더 짧습니다! 그대로 진열합니다.")
+                        self.trigger_restock("front0")   # 앞쪽에 진열
+                    else:
+                        self.get_logger().info("신규 물품의 유통기한이 더 넉넉합니다. 선입선출을 실시합니다.")
+                        self.trigger_move_robot(behavior_name="DROP_TEMP1", next_step_callback = self.trigger_move_scan)     # 선입선출 실행
             else:
                 self.get_logger().error("❌ 데이터베이스 노드로부터 유통기한 데이터를 수신하지 못했습니다.")
         except Exception as e:
@@ -178,7 +232,13 @@ class AdminAuthManagerNode(Node):
         self.trigger_move_robot(behavior_name="MOVE_SCAN", next_step_callback=lambda: self.trigger_pick_for_drop(self.found_object))
     
     def trigger_pick_for_drop(self, object_name):       # 스캔 후 물품을 잡기
-        self.trigger_move_robot(behavior_name="SCAN_AND_PICK", next_step_callback=self.trigger_drop_temp2, object_name=object_name)
+        if self.dispose_mode:   # 폐기
+            self.trigger_move_robot(behavior_name="SCAN_AND_PICK", next_step_callback=self.trigger_scan_qr, object_name=object_name)
+        else:       # 입고
+            self.trigger_move_robot(behavior_name="SCAN_AND_PICK", next_step_callback=self.trigger_drop_temp2, object_name=object_name)
+    
+    def trigger_dispose(self):  
+        self.trigger_move_robot(behavior_name="DISPOSE_OBJECT", next_step_callback=self.trigger_dispose_product_loop)
     
     def trigger_drop_temp2(self):       # 2번 지점에 물품을 두기
         self.trigger_move_robot(behavior_name="DROP_TEMP2", next_step_callback=lambda: self.trigger_restock("back1"))
@@ -198,7 +258,10 @@ class AdminAuthManagerNode(Node):
                                         place=1, object_found=self.found_object)   # 2번 물품 뒤쪽에 두기 -> 1번 물품 앞쪽에 두가
     
     def done_warehousing(self):     
-        self.get_logger().info(f"'입고 완료")
+        if self.dispose_mode is True:
+            self.dispose_mode = False
+        else:
+            self.get_logger().info(f"'입고 완료")
         self.trigger_move_robot(behavior_name="MOVE_HOME", next_step_callback=self.move_home_done)
         
     def move_home_done(self):
@@ -206,6 +269,7 @@ class AdminAuthManagerNode(Node):
         self.admin_is_robot_busy = False  
 
     def trigger_move_robot(self, behavior_name, next_step_callback, object_name="", place=-1, object_found=""):
+
         goal_msg = RobotPickPlace.Goal()
         goal_msg.behavior_name = behavior_name
         goal_msg.object_name = object_name

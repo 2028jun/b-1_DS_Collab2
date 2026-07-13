@@ -367,7 +367,7 @@ class GripperVisionNode(Node):
         if not (0 <= x < width and 0 <= y < height):
             return None
 
-        patch = self.rs_depth_frame[y-5:y+6, x-5:x+6]       # 11 by 11 면적의 깊이 값
+        patch = self.rs_depth_frame[y-10:y+11, x-10:x+11]       # 11 by 11 면적의 깊이 값
         valid = patch[patch > 0]    # 유효한 깊이 값 필터링
 
         if len(valid) == 0: 

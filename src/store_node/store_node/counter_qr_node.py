@@ -71,7 +71,17 @@ class CounterQrNode(Node):
         self.last_detect_time = now
 
         # QR 코드 검출 시도
-        data, _, _ = self.qr_detector.detectAndDecode(frame)
+        try:
+            data, _, _ = self.qr_detector.detectAndDecode(frame)
+        except cv2.error as e:
+            # convexHull, contourArea 등 OpenCV C++ 내부에서 터지는 모든 에러를 안전하게 포획
+            self.get_logger().warn(f"⚠️ OpenCV 내부 기하학 연산 오류 방어 (convexHull 등): {e}")
+            return # 프레임 버리고 다음 프레임으로 통과
+        except Exception as e:
+            # 그 외에 발생할 수 있는 모든 파이썬 런타임 예외 방어
+            self.get_logger().warn(f"⚠️ QR 디코딩 파싱 예외 방어: {e}")
+            return
+        
         if data:
             if data == self.last_qr_data:   # 같은 QR을 인식했을 때
                 self.last_success_time = now
@@ -88,7 +98,7 @@ class CounterQrNode(Node):
             elif self.admin_is_robot_busy is True:         # 입고시 로봇이 QR을 찍었을 때
                 self.qr_pub_db.publish(msg)
                 self.qr_pub_robot.publish(msg)  
-                self.get_logger().info(f'QR 코드 인식 및 전송 성공(입고): {data}')
+                self.get_logger().info(f'QR 코드 인식 및 전송 성공(입고/폐기): {data}')
             else:                # 사람이 직접 QR 찍을 때 
                 self.qr_pub_db.publish(msg)                    
                 self.qr_pub_robot.publish(msg)  
