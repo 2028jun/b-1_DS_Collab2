@@ -1,8 +1,11 @@
 # Goal
 string behavior_name   # 로봇 동작 이름
 string object_name     # 로봇이 잡을 물품 이름
+int32 place     # 진열시 진열할 물품의 위치
+string object_found  # 검출된 물품
 ---
 # 2. Result (최종 완료 결과)
 bool success
 string qr_data # QR 스캔시 전달할 데이터
+string found_object  # 검출된 물품
 ---

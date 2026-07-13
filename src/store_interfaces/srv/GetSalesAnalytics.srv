@@ -1,0 +1,11 @@
+# 요청: 분석할 기간
+string period
+bool use_ai
+
+---
+
+# 응답: 결과
+bool success
+string report_json
+string summary
+string error_message

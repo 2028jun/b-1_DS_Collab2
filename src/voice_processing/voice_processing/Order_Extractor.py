@@ -6,21 +6,21 @@ from langchain.prompts import PromptTemplate
 import json
 
 
-load_dotenv(dotenv_path=".env")
-openai_api_key = os.getenv("OPENAI_API_KEY")
+load_dotenv(dotenv_path=".env")          # .env 파일을 환경 변수로 등록
+openai_api_key = os.getenv("OPENAI_API_KEY")        # .env 파일의 API 키를 변수에 등록
 
 
 class OrderExtractor:
     def __init__(self):
-        self.llm = ChatOpenAI(
+        self.llm = ChatOpenAI(      # gpt-4o 모델 불러오기
             model="gpt-4o", temperature=0, openai_api_key=openai_api_key
         )
 
-        self.translation_map = {
+        self.translation_map = {        # 물품과 영어 매핑
             "담배": "smoke",
             "컵라면": "cup_noodle",
             "커피": "coffee",
-            "음료": "drink",       # 예: 앞서 비전 노드에서 'water'를 썼던 것을 고려하여 매핑
+            "음료": "drink",       
             "초코송이": "choco",
             "쫄병": "jjolbyung"
         }
@@ -61,31 +61,31 @@ class OrderExtractor:
             <사용자 입력>
             "{user_input}"
         """
+        # gpt-4o에 주문을 딕셔너리 형태로 출력하도록 작성
         
-        self.prompt_template = PromptTemplate(
+        self.prompt_template = PromptTemplate(           # 프롬프트 문장
             input_variables=["user_input"], template=prompt_content
         )
-        self.lang_chain = self.prompt_template | self.llm
+        self.lang_chain = self.prompt_template | self.llm   # 프롬프트 문장을 gpt-4o에 연결한 변수 (랭체인 라이브러리에서는 | : 연결파이프로 작동)
 
     def extract_order(self, user_input):
-        """사용자 입력에서 물품과 수량 추출"""
         try:
-            response = self.lang_chain.invoke({"user_input": user_input})
+            response = self.lang_chain.invoke({"user_input": user_input})    # 랭체인 구동 -> 사용자의 음성 단어와 프롬프트가 결합되어 gpt-4o에 전달, 응답을 받아옴
 
-            content = response.content.strip()
-            content = content.replace("```json", "").replace("```", "").strip()
+            content = response.content.strip()       # 응답의 공백 제거
+            content = content.replace("```json", "").replace("```", "").strip()     # json, ''' 단어를 지우고 공백 제거
 
             print(f"주문 추출 LLM 응답: {content}")
 
-            korean_dict = json.loads(content)
+            korean_dict = json.loads(content)       # json을 딕셔너리 형식으로 변환
             
             english_dict = {}
-            for kr_item, quantity in korean_dict.items():
+            for kr_item, quantity in korean_dict.items():       # 한글로 된 물품 이름을 영어로 변환
                 en_item = self.translation_map.get(kr_item, kr_item)
                 english_dict[en_item] = quantity
 
             print(f"✅ 최종 추출된 영문 주문: {english_dict}")
-            return english_dict
+            return english_dict     # 영어로 된 물품 목록을 return
 
         except Exception as e:
             print(f"❌ 수량 추출 실패: {e}")

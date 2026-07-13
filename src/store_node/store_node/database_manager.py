@@ -5,28 +5,28 @@ from rclpy.node import Node
 from std_msgs.msg import String 
 import json
 
-from store_interfaces.srv import UpdateInventory 
+from store_interfaces.srv import UpdateInventory, CheckStock
 
 class DatabaseNode(Node):
     def __init__(self):
-        super().__init__('database_node')       # 로봇으로 부터 온 QR 데이터
+        super().__init__('database_node')       
 
-        self.srv = self.create_service(
-            UpdateInventory,
-            '/update_stock',
-            self.update_qr_data
-        )
-
+        # 서브스크라이버
         self.qr_sub_db = self.create_subscription(String, '/counter_qr_data_db', self.qr_sub_db_callback, 10)     # 사람으로 부터 온 QR 데이터
+        self.auth_sub = self.create_subscription(String, '/store_state', self.auth_sub_callback, 10)         # 현재 모드 확인
 
-        self.auth_sub = self.create_subscription(String, '/store_state', self.auth_sub_callback, 10)
+        # 서비스 서버
+        self.check_stock = self.create_service(CheckStock, '/check_stock', self.handle_check_all_stock)  # 재고 확인 
+        self.srv = self.create_service(UpdateInventory, '/update_stock', self.update_qr_data)      # 재고 업데이트
+        self.expiry_cli = self.create_service(CheckStock, '/check_expiry_date', self.check_expiry_date)  # 유통기한 확인 
 
         self.last_qr_data = None
         self.qr_data = None
         self.auth_status = "SERVICE"
-        self.last_processed_mode = None
+        self.last_auth_status = "SERVICE"
+        self.dispose_mode = False
 
-        try:
+        try:        # MySQL 데이터베이스 연결
             self.conn = pymysql.connect(
                 host='localhost',
                 user='root',           
@@ -40,18 +40,44 @@ class DatabaseNode(Node):
         except Exception as e:
             self.get_logger().error(f"❌ 데이터베이스 연결 실패! 에러 내용: {e}")
             raise e # 연결 실패 시 노드 실행 강제 중단
-    
-    def auth_sub_callback(self, msg):
+        
+    def handle_check_all_stock(self, request, response):
+        response.inventory_json = "{}"
+        response.success = False
+
+        sql_select_all = """
+            SELECT *
+            FROM products;
+        """
+        try:
+            with self.conn.cursor() as cursor:
+                cursor.execute(sql_select_all)               
+                rows = cursor.fetchall()        # DictCursor이므로 [{'name': 'coffee', 'stock': 5}, {'name': 'snack', 'stock': 2}] 형태로 가져옴
+
+                if rows:
+                    response.inventory_json = json.dumps(rows, ensure_ascii=False)  # 재고 현황 전송
+                    response.success = True
+
+        except Exception as e:
+            self.get_logger().error(f"❌ 전체 재고 쿼리 조회 중 SQL 에러 발생: {e}")
+            response.success = False
+
+        return response
+
+    def auth_sub_callback(self, msg):       # 동작 모드
         parts = msg.data.split(',')
         self.auth_status = parts[0].strip()
+        if self.last_auth_status != self.auth_status:
+            self.last_auth_status = self.auth_status
+            self.last_qr_data = None
+            self.qr_data = None
     
-    def qr_sub_db_callback(self, msg):
+    def qr_sub_db_callback(self, msg):      # 사람이 직접  QR을 찍었을 때 or 입고/폐기 모드 일때
         self.qr_data = msg.data
-        if (self.last_qr_data != self.qr_data) or (self.last_processed_mode != self.auth_status):
-            success = self.handle_update_stock()
+        if self.last_qr_data != self.qr_data:
+            success = self.handle_update_stock()    # 재고 업데이트
             if success is True:
                 self.last_qr_data = self.qr_data
-                self.last_processed_mode = self.auth_status
 
     def update_qr_data(self, request, response):
         self.qr_data = request.qr_data
@@ -61,11 +87,10 @@ class DatabaseNode(Node):
             response.success = False
             return response
 
-        if (self.last_qr_data != self.qr_data) or (self.last_processed_mode != self.auth_status):
-            success = self.handle_update_stock()
+        if self.last_qr_data != self.qr_data:
+            success = self.handle_update_stock()        # 재고 업데이트
             if success is True:
                 self.last_qr_data = self.qr_data
-                self.last_processed_mode = self.auth_status
                 response.success = success
             else:
                 response.success = False
@@ -76,7 +101,7 @@ class DatabaseNode(Node):
     
     def handle_update_stock(self):
         success = False
-        parsed_data = self.data_parsing(self.qr_data)
+        parsed_data = self.data_parsing(self.qr_data)   # QR 데이터 처리
 
         if parsed_data is None:
             self.get_logger().error("❌ 데이터 파싱 실패로 인해 DB 처리를 중단합니다.")
@@ -85,28 +110,51 @@ class DatabaseNode(Node):
         product_name, serial_number, clean_price, expiry_date = parsed_data
 
         if self.auth_status == "ADMIN":
-            # 물품 입고 기록
-            sql = """
-                INSERT INTO products (name, SN, price, expiry_date)
-                VALUES (%s, %s, %s, %s) 
-                ON DUPLICATE KEY UPDATE
-                    name = VALUES(name),
-                    price = VALUES(price),
-                    expiry_date = VALUES(expiry_date);
-            """
-            try:
-                with self.conn.cursor() as cursor:
-                    cursor.execute(sql, (product_name, serial_number, clean_price, expiry_date))
-                    
-                    self.conn.commit()
-                    
-                    self.get_logger().info(f"데이터베이스 등록 완료!")
-                    success = True
-                    
-            except Exception as e:
-                self.conn.rollback()
-                self.get_logger().error(f"❌ 관리자 상품 등록 중 SQL 에러 발생: {e}")
-                success = False
+            # 물품 입고, 데이터베이스에 상품 등록
+            if not self.dispose_mode:       # 입고 모드
+                sql = """
+                    INSERT INTO products (name, SN, price, expiry_date)
+                    VALUES (%s, %s, %s, %s) 
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        price = VALUES(price),
+                        expiry_date = VALUES(expiry_date);
+                """
+                try:
+                    with self.conn.cursor() as cursor:
+                        cursor.execute(sql, (product_name, serial_number, clean_price, expiry_date))    # 데이터베이스 등록
+                        self.conn.commit()
+                        
+                        self.get_logger().info(f"데이터베이스 등록 완료!")
+                        success = True
+                        
+                except Exception as e:
+                    self.conn.rollback()
+                    self.get_logger().error(f"❌ 관리자 상품 등록 중 SQL 에러 발생: {e}")
+                    success = False
+            elif self.dispose_mode: # 폐기 모드
+                sql_delete_stock = """                  
+               DELETE FROM products 
+                WHERE SN = %s;
+                """
+                try:
+                    with self.conn.cursor() as cursor:
+                        
+                        affected_rows = cursor.execute(sql_delete_stock, (serial_number,))  # 데이터베이스 삭제
+                        
+                        if affected_rows > 0:
+                            self.conn.commit()
+                            self.get_logger().info(f"재고 삭제 완료")
+                            success = True
+                        else:
+                            self.conn.rollback()
+                            self.get_logger().warn(f"⚠️ 출고 실패: 매대 재고(products)에 존재하지 않는 SN입니다: {serial_number}")
+                            success = False
+                            
+                except Exception as e:
+                    self.conn.rollback()
+                    self.get_logger().error(f"❌ 서비스 모드 출고 처리 중 SQL 에러 발생: {e}")
+                    success = False
         
         elif self.auth_status == "SERVICE":
             # 물품 판매 -> 재고 삭제
@@ -124,11 +172,8 @@ class DatabaseNode(Node):
             try:
                 with self.conn.cursor() as cursor:
                     
-                    # 출고 이력에 시리얼 넘버 추가
                     cursor.execute(sql_insert_outbound_history, (product_name, serial_number,))
-                    
-                    # Step B: 기존 재고 테이블(products)에서 삭제 진행 (인자 1개)
-                    affected_rows = cursor.execute(sql_delete_stock, (serial_number,))
+                    affected_rows = cursor.execute(sql_delete_stock, (serial_number,))  # 삭제된 행의 개수 반환
                     
                     if affected_rows > 0:
                         self.conn.commit()
@@ -146,7 +191,7 @@ class DatabaseNode(Node):
 
         return success
 
-    def data_parsing(self, data):
+    def data_parsing(self, data):       # QR 데이터 처리
         try:
             data_dict = json.loads(data)
      
@@ -164,6 +209,56 @@ class DatabaseNode(Node):
             self.get_logger().error(f"QR 데이터 파싱 실패 (올바르지 않은 형식): {e}")
             return None
 
+    def check_expiry_date(self, request, response):        # 가장 빠른 유통기한을 추출
+        response.closest_expiry_list = "[]"
+        response.success = False
+        self.dispose_mode = request.dispose_mode
+
+
+        if self.dispose_mode:
+            self.get_logger().info("🗑️ [폐기 모드] 전체 테이블 대상 유통기한 조회를 시작합니다.")
+            sql_query = """
+                SELECT name, MIN(expiry_date) AS expiry_date
+                FROM products
+                WHERE expiry_date IS NOT NULL
+                GROUP BY name;
+            """
+            query_params = () # 파라미터 필요 없음
+        elif not self.dispose_mode:
+            sql_query  = """
+                SELECT name, MIN(expiry_date) AS expiry_date
+                FROM products
+                WHERE SN NOT IN (
+                    SELECT temp.SN FROM (
+                        SELECT SN FROM products 
+                        WHERE name = %s AND expiry_date = %s 
+                        LIMIT 1
+                    ) AS temp
+                )
+                GROUP BY name;
+            """
+            query_params = (request.current_name, request.current_expiry)
+        try:
+            with self.conn.cursor() as cursor:
+                cursor.execute(sql_query , query_params)
+                # DictCursor이므로 [{'name': '삼각김밥', 'expiry_date': '2026-07-13'}, ...] 형태로 수신
+                closest_items_list = cursor.fetchall() 
+                
+                if closest_items_list:
+                   response.closest_expiry_list = json.dumps(closest_items_list, ensure_ascii=False)
+                   response.success = True
+                else:
+                    self.get_logger().warn("조회 가능한 재고가 하나도 없습니다.")
+                    response.closest_expiry_list = json.dumps([]) # 빈 배열 포장
+                    response.success = True
+
+        except Exception as e:
+            self.get_logger().error(f"❌ 전체 유통기한 임박 데이터 조회 중 SQL 에러 발생: {e}")
+            response.closest_expiry_list = json.dumps([]) # 빈 배열 포장
+            response.success = False
+        
+        return response
+        
     def destroy_node(self):
         self.get_logger().info("🔌 데이터베이스 노드 종료 및 자원 해제")
         if hasattr(self, 'conn') and self.conn.open:

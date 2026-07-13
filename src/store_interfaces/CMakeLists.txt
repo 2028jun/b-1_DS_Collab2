@@ -23,9 +23,10 @@ set(srv_files
   "srv/OrderProduct.srv"
   "srv/StartAdminAuth.srv"
   "srv/UpdateInventory.srv"
-  "srv/DetectProduct.srv"
   "srv/FineTuneQr.srv"
   "srv/ScanCounterQr.srv"
+  "srv/CheckStock.srv"
+  "srv/GetSalesAnalytics.srv"
 )
 
 set(action_files
