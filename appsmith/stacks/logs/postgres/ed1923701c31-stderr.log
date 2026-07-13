@@ -1,0 +1,136 @@
+2026-07-11 22:46:25.387 UTC [1699] LOG:  starting PostgreSQL 14.23 (Ubuntu 14.23-1.pgdg24.04+1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+2026-07-11 22:46:25.387 UTC [1699] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2026-07-11 22:46:25.392 UTC [1699] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-07-11 22:46:25.400 UTC [1740] LOG:  database system was shut down at 2026-07-11 22:46:24 UTC
+2026-07-11 22:46:25.405 UTC [1699] LOG:  database system is ready to accept connections
+2026-07-13 12:16:00.868 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:00.914 UTC [1699] LOG:  could not open file "postmaster.pid": Permission denied; continuing anyway
+2026-07-13 12:16:01.519 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:01.519 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:02.175 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:02.175 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:02.833 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:02.833 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:03.489 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:03.489 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:04.147 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:04.147 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:04.803 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:04.803 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:05.457 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:05.458 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:06.115 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:06.115 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:06.770 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:06.770 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:07.425 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:07.425 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:08.081 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:08.081 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:08.735 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:08.735 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:09.392 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:09.393 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:10.049 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:10.049 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:10.703 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:10.703 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:11.115 UTC [1748] LOG:  using stale statistics instead of current ones because stats collector is not responding
+2026-07-13 12:16:11.119 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:11.119 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:11.122 UTC [45506] ERROR:  could not open file "base/13824/2601": Permission denied
+2026-07-13 12:16:11.122 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:11.122 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:16:11.122 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:00.912 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:00.912 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:01.567 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:01.567 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:02.221 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:02.221 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:02.873 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:02.873 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:03.525 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:03.525 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:04.177 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:04.177 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:04.832 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:04.832 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:05.484 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:05.485 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:06.137 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:06.137 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:06.790 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:06.790 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:07.446 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:07.446 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:08.102 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:08.102 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:08.756 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:08.756 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:09.411 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:09.411 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:10.063 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:10.063 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:10.720 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:10.720 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:11.129 UTC [1748] LOG:  using stale statistics instead of current ones because stats collector is not responding
+2026-07-13 12:17:11.130 UTC [1699] LOG:  could not open file "postmaster.pid": Permission denied; continuing anyway
+2026-07-13 12:17:11.132 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:11.132 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:11.135 UTC [45540] ERROR:  could not open file "base/13824/2601": Permission denied
+2026-07-13 12:17:11.136 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:11.136 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:11.136 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:56.884 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:17:56.884 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:00.962 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:00.962 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:01.620 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:01.620 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:02.276 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:02.276 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:02.931 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:02.931 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:03.585 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:03.585 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:04.240 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:04.240 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:04.896 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:04.896 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:05.552 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:05.552 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:06.206 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:06.206 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:06.863 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:06.863 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:07.519 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:07.519 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:08.176 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:08.176 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:08.833 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:08.833 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:09.489 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:09.489 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:10.145 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:10.145 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:10.798 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:10.798 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:11.202 UTC [1699] LOG:  could not open file "postmaster.pid": Permission denied; continuing anyway
+2026-07-13 12:18:11.209 UTC [1748] LOG:  using stale statistics instead of current ones because stats collector is not responding
+2026-07-13 12:18:11.211 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:11.211 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:11.212 UTC [45571] ERROR:  could not open file "base/13824/2601": Permission denied
+2026-07-13 12:18:11.212 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:11.212 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:11.212 UTC [1749] LOG:  could not open temporary statistics file "pg_stat_tmp/global.tmp": Permission denied
+2026-07-13 12:18:29.289 UTC [1699] LOG:  received smart shutdown request
+2026-07-13 12:18:29.289 UTC [1699] LOG:  could not open file "postmaster.pid": Permission denied
+2026-07-13 12:18:29.297 UTC [1699] LOG:  background worker "logical replication launcher" (PID 1750) exited with exit code 1
+2026-07-13 12:18:29.298 UTC [1745] LOG:  shutting down
+2026-07-13 12:18:29.299 UTC [1745] PANIC:  could not open file "/appsmith-stacks/data/postgres/main/global/pg_control": Permission denied
+2026-07-13 12:18:29.395 UTC [1699] LOG:  checkpointer process (PID 1745) was terminated by signal 6: Aborted
+2026-07-13 12:18:29.395 UTC [1699] LOG:  terminating any other active server processes
+2026-07-13 12:18:29.395 UTC [1749] LOG:  could not open temporary statistics file "pg_stat/global.tmp": Permission denied
+2026-07-13 12:18:29.398 UTC [1699] LOG:  abnormal database system shutdown
+2026-07-13 12:18:29.399 UTC [1699] LOG:  database system is shut down

@@ -55,5 +55,11 @@ def generate_launch_description():
             name='DB',
             output='screen'
         ),
-
+        
+        Node(
+            package='store_node',       
+            executable='api_manager', 
+            name='API',
+            output='screen'
+        ),
     ])
