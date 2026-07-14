@@ -63,8 +63,15 @@
 * Python >= 3.8
 * rclpy
 * store_interfaces
+  
+### 1. 인프라 및 컨테이너 플랫폼 설치
+- 도커 가상화 엔진 및 멀티 컨테이너 관리 툴 구성
+```
+sudo apt update
+sudo apt install docker.io docker-compose-v2 -y
+```
 
-### 1. Python 외부 라이브러리 설치
+### 2. Python 외부 라이브러리 설치
 - OpenAI API & LLM 프롬프트 제어 패키지
 ```
 pip install openai langchain langchain-openai python-dotenv
@@ -90,7 +97,7 @@ pip install pymodbus
 pip install fastapi pydantic uvicorn
 ```
 
-### 2. ROS2 패키지 설치
+### 3. ROS2 패키지 설치
 - OpenCV와 ROS 이미지 토픽 간 변환 브릿지 패키지
 ```
 sudo apt install ros-humble-cv-bridge
@@ -135,12 +142,36 @@ source install/setup.bash
 
 ### Step 3. voice_processing 패키지의 STT.py와 store_node 패키지의 counter_qr_node.py를 열어서 각 마이크, QR 인식용 웹캠 index를 확인하고 변경합니다.
 
-### Step 4. 런치 파일을 실행합니다.
+### Step 4. 데이터베이스(MySQL)를 만들고 데이터를 주입합니다.
+```
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS <데이터베이스명>;"
+
+mysql -u root -p <데이터베이스명> < convenience_store_db.sql
+```
+
+### Step 5. 데이터베이스 및 앱스미스(Appsmith) 인프라 구동
+```
+cd <본인 워크스페이스>/appsmith
+docker compose up -d
+```
+- 웹 브라우저를 열고 http://localhost:8080에 접속합니다.
+- 만약 화면이 비어있다면, 대시보드 우측 상단 create_new에서 Import -> From file을 선택하고 제공된 .json 백업 파일을 업로드합니다.
+- 좌측 하단 Data Sources(원통 모형) 메뉴에서 본인 환경의 MySQL 계정 정보(Host, ID, PW)를 입력한 뒤 Test configuration 후 Save 하여 데이터베이스 연결을 동기화합니다.
+- ※ host address에는 hostname -I를 입력했을 때 나오는 첫번째 IP를 사용합니다.
+- ※ convenience_store_db를 Database name에 입력합니다.
+```
+hostname -I
+```
+- 에디터 우측 상단의 [Deploy] 버튼을 누른 후 [Launch]를 눌러 실전 키오스크 모드로 진입합니다.
+
+### Step 6. 런치 파일을 실행합니다.
 ```
 ros2 launch store_node store_node.launch.py
 ```
 
-### Step 5. '편돌아'라고 음성 호출을 하고 실행할 작업(주문, 입고, 폐기)을 명령합니다.
+### Step 7-1. '편돌아'라고 음성 호출을 하고 실행할 작업(주문, 입고, 폐기)을 명령합니다.
 - ※ 입고/폐기는 관리자 카드키를 카메라에 인식한 후(관리자 모드 변경) 실행 가능합니다.
 - ※ 관리자 모드에서 서비스 모드로 전환하기 위해서는 '편돌아'라고 호출한 후 '서비스 모드'라고 명령하면 됩니다.
+
+### Step 7-2. 앱스미스에서 원하는 상품을 추가하고 submit 버튼을 눌러 주문을 실행합니다.
 </p>
