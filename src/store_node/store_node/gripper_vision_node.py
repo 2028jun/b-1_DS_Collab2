@@ -20,31 +20,18 @@ except ImportError as exc:
 
 
 def get_default_model_path():
-    """프로젝트 안의 best.pt를 현재 실행 위치와 파일 위치 기준으로 찾습니다."""
-    relative_model_path = os.path.join(
-        'yolo_training',
-        'runs',
-        'detect',
-        'store_products',
-        'weights',
-        'best.pt',
-    )
-    start_dirs = [os.getcwd(), os.path.dirname(__file__)]
-
-    for start_dir in start_dirs:
-        current_dir = os.path.abspath(start_dir)
-        while True:
-            candidate = os.path.join(current_dir, relative_model_path)
-            if os.path.exists(candidate):
-                return candidate
-
-            parent_dir = os.path.dirname(current_dir)
-            if parent_dir == current_dir:
-                break
-            current_dir = parent_dir
-
-    return os.path.abspath(relative_model_path)
-
+    current_file_path = os.path.abspath(__file__)
+    
+    current_dir = os.path.dirname(current_file_path)
+    
+    package_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+    
+    resolved_path = os.path.join(package_root, "best.pt")
+    
+    if not os.path.exists(resolved_path):
+        return os.path.abspath("best.pt")
+        
+    return resolved_path
 
 class GripperVisionNode(Node):
     """RealSense D435i 이미지에서 YOLO로 상품을 찾고 depth 기반 3D 좌표를 계산"""
