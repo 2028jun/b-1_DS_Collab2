@@ -3,7 +3,7 @@
 > **팀원:** [이준우, 김범준, 허재혁, 정준혁]
 
 ## 1. 📌 프로젝트 개요 (Project Introduction)
-- 이 프로젝트는 ROS2 Humble 환경을 기반으로 제어되는 6축 다관절 로봇팔과 MySQL, realsense카메라 등을 이용해 자동으로 주문/입고/폐기 기능을 수행하는 퍈의점 무인화 시스템입니다. 
+- 이 프로젝트는 ROS2 Humble 환경을 기반으로 제어되는 6축 다관절 로봇팔과 MySQL, realsense카메라 등을 이용해 자동으로 주문/입고/폐기 기능을 수행하는 편의점 무인화 시스템입니다. 
 - YOLOv8 기반의 객체 인식을 통해 매대의 물품을 인식하고 각 물품의 QR코드를 인식하여 DB와 서로 통신하며 작업 수행 및 데이터를 관리합니다.
 - Whisper-1과 GPT-4o 모델을 사용하여 사용자의 음성 명령을 인식하고 명령에 따른 작업을 수행합니다.
 
@@ -116,7 +116,7 @@ sudo apt install portaudio19-dev libportaudio2 python3-pyaudio
 ## 5. ▶️ 실행 순서 (Usage Guide)
 프로젝트를 실행하기 위한 순서입니다. 터미널 명령어를 순서대로 입력해 주세요.
 
-### Step 1. 로봇팔 및 realsense depth 카메라, C270 웹캡 연결
+### Step 1. 로봇팔 및 realsense depth 카메라, C270 웹캠 연결
   - 로봇팔, realsense depth 카메라, C270 웹캠 선을 연결하고 구동합니다.
 ```
 realsense
